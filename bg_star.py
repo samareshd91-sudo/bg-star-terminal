@@ -5,15 +5,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time 
 
-# ১. প্রফেশনাল লেআউট ও ডার্ক থিম (Hard Block Anti-Scroll)
+# ১. প্রফেশনাল লেআউট ও ডার্ক থিম
 st.set_page_config(page_title="BG STAR Pro Analytics", layout="wide")
 st.markdown("""
     <style>
-    /* মোবাইলের অটো-রিফ্রেশ একদম জোর করে বন্ধ করার ম্যাজিক কোড */
     html, body, [data-testid="stAppViewContainer"] {
         overscroll-behavior-y: none !important;
     }
-    
     .stMetric { background-color: #1E1E2E; padding: 15px; border-radius: 10px; border: 1px solid #333; border-left: 4px solid #f39c12; }
     </style>
 """, unsafe_allow_html=True)
@@ -23,7 +21,6 @@ st.sidebar.title("⚙️ BG STAR Control")
 selected_coin = st.sidebar.selectbox("Select Coin", ["ETH/USDT", "BTC/USDT", "BNB/USDT", "SOL/USDT"])
 selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
 
-# লাইভ অটো-রিফ্রেশ সুইচ (৩ সেকেন্ড স্পিড)
 auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 3s)", value=True)
 
 st.title(f"🚀 BG STAR ADVANCED TERMINAL V6 (Live Edition)")
@@ -78,7 +75,7 @@ fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=col
 fig.update_layout(template="plotly_dark", height=650, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False)
 st.plotly_chart(fig, use_container_width=True)
 
-# ৮. BG STAR AI: SMC ইঞ্জিন
+# ৮. BG STAR AI: SMC ইঞ্জিন ও সাউন্ড অ্যালার্ম
 st.markdown("### 🧠 BG STAR Smart Money Engine (Hidden Analysis)")
 
 risk_reward_gap = resistance - support
@@ -90,9 +87,9 @@ else:
     smc_analysis.append("MACD বিয়ারিশ (Sellers এর পাওয়ার বেশি)।")
 
 if curr_price <= df['bb_lower'].iloc[-1] + 2:
-    smc_analysis.append("দাম Bollinger Band এর একদম নিচে, এখান থেকে বাউন্স করার বিশাল সুযোগ।")
+    smc_analysis.append("Bollinger Band সাপোর্ট।")
 elif curr_price >= df['bb_upper'].iloc[-1] - 2:
-    smc_analysis.append("দাম Bollinger Band এর একদম ওপরে, ক্র্যাশ করতে পারে।")
+    smc_analysis.append("Bollinger Band রেজিস্টেন্স।")
 
 if curr_price <= support + (risk_reward_gap * 0.15): 
     sl = support - (support * 0.005)
@@ -100,6 +97,10 @@ if curr_price <= support + (risk_reward_gap * 0.15):
     tp2 = resistance
     
     st.success(f"**🟢 WHALE BUY ZONE (Bullish Order Block):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
+    
+    # সাউন্ড ও নোটিফিকেশন (Buy)
+    st.toast("🟢 STRONG BUY SIGNAL! এখনই চেক করুন!", icon="🔔")
+    st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
 elif curr_price >= resistance - (risk_reward_gap * 0.15): 
     sl = resistance + (resistance * 0.005)
@@ -107,6 +108,10 @@ elif curr_price >= resistance - (risk_reward_gap * 0.15):
     tp2 = support
     
     st.error(f"**🔴 WHALE SELL ZONE (Bearish Order Block):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
+    
+    # সাউন্ড ও নোটিফিকেশন (Sell)
+    st.toast("🔴 STRONG SELL SIGNAL! এখনই চেক করুন!", icon="🔔")
+    st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
 else:
     st.warning(f"**⚪ NO TRADE ZONE (Retail Trap):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n💡 **পরামর্শ:** কোনো ট্রেড নেবেন না। দাম ${support:.2f} বা ${resistance:.2f} এ আসার জন্য অপেক্ষা করুন।")
