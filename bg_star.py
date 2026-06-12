@@ -14,7 +14,7 @@ st.markdown("""
 st.title("🚀 BG STAR ADVANCED TERMINAL V2")
 
 # ১. ডাটা আনা
-exchange = ccxt.binance()
+exchange = ccxt.kucoin()
 bars = exchange.fetch_ohlcv('ETH/USDT', timeframe='15m', limit=100) # ১৫ মিনিটের ক্যান্ডেল (বেশি অ্যাকুরেট)
 df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
