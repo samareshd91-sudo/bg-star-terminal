@@ -5,11 +5,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time 
 
-# ১. প্রফেশনাল লেআউট ও ডার্ক থিম
+# ১. প্রফেশনাল লেআউট ও ডার্ক থিম (Super Anti-Scroll Fix)
 st.set_page_config(page_title="BG STAR Pro Analytics", layout="wide")
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] {
+    /* মোবাইলের অটো-রিফ্রেশ একদম জোর করে বন্ধ করার শক্তিশালী কোড */
+    html, body, #root, .stApp, [data-testid="stAppViewContainer"], .main {
+        overscroll-behavior: none !important;
         overscroll-behavior-y: none !important;
     }
     .stMetric { background-color: #1E1E2E; padding: 15px; border-radius: 10px; border: 1px solid #333; border-left: 4px solid #f39c12; }
@@ -21,6 +23,7 @@ st.sidebar.title("⚙️ BG STAR Control")
 selected_coin = st.sidebar.selectbox("Select Coin", ["ETH/USDT", "BTC/USDT", "BNB/USDT", "SOL/USDT"])
 selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
 
+# লাইভ অটো-রিফ্রেশ সুইচ 
 auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 3s)", value=True)
 
 st.title(f"🚀 BG STAR ADVANCED TERMINAL V6 (Live Edition)")
@@ -98,7 +101,6 @@ if curr_price <= support + (risk_reward_gap * 0.15):
     
     st.success(f"**🟢 WHALE BUY ZONE (Bullish Order Block):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
     
-    # সাউন্ড ও নোটিফিকেশন (Buy)
     st.toast("🟢 STRONG BUY SIGNAL! এখনই চেক করুন!", icon="🔔")
     st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
@@ -109,14 +111,13 @@ elif curr_price >= resistance - (risk_reward_gap * 0.15):
     
     st.error(f"**🔴 WHALE SELL ZONE (Bearish Order Block):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
     
-    # সাউন্ড ও নোটিফিকেশন (Sell)
     st.toast("🔴 STRONG SELL SIGNAL! এখনই চেক করুন!", icon="🔔")
     st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
 else:
-    st.warning(f"**⚪ NO TRADE ZONE (Retail Trap):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n💡 **পরামর্শ:** কোনো ট্রেড নেবেন না। দাম ${support:.2f} বা ${resistance:.2f} এ আসার জন্য অপেক্ষা করুন।")
+    st.warning(f"**⚪ NO TRADE ZONE (Retail Trap):** \n\n**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n💡 **পরামর্শ:** কোনো ট্রেড নেবেন সাসপেন্স। দাম ${support:.2f} বা ${resistance:.2f} এ আসার জন্য অপেক্ষা করুন।")
 
-# ৯. ম্যাজিক অটো-রিফ্রেশ লুপ (৩ সেকেন্ড পর পর)
+# ৯. ম্যাজিক অটো-রিফ্রেশ লুপ
 if auto_refresh:
     time.sleep(3)
     st.rerun()
