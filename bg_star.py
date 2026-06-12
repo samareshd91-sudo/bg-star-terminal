@@ -2,61 +2,115 @@ import streamlit as st
 import ccxt
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# প্রফেশনাল লেআউট ও ডার্ক থিম স্টাইল
+# ১. প্রফেশনাল লেআউট ও ডার্ক থিম
 st.set_page_config(page_title="BG STAR Pro Analytics", layout="wide")
 st.markdown("""
     <style>
-    .stMetric { background-color: #1E1E2E; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+    .stMetric { background-color: #1E1E2E; padding: 15px; border-radius: 10px; border: 1px solid #333; border-left: 4px solid #f39c12; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 BG STAR ADVANCED TERMINAL V2")
+# ২. সাইডবার (কন্ট্রোল প্যানেল)
+st.sidebar.title("⚙️ BG STAR Control")
+selected_coin = st.sidebar.selectbox("Select Coin", ["ETH/USDT", "BTC/USDT", "BNB/USDT", "SOL/USDT"])
+selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
 
-# ১. ডাটা আনা
+if st.sidebar.button("🔄 Refresh Live Data"):
+    st.toast("Data Refreshed Successfully!", icon="✅")
+
+st.title(f"🚀 BG STAR ADVANCED TERMINAL V5 (SMC Engine)")
+st.subheader(f"Live Market Analysis: {selected_coin} ({selected_tf})")
+
+# ৩. ডাটা আনা
 exchange = ccxt.kucoin()
-bars = exchange.fetch_ohlcv('ETH/USDT', timeframe='15m', limit=100) # ১৫ মিনিটের ক্যান্ডেল (বেশি অ্যাকুরেট)
+bars = exchange.fetch_ohlcv(selected_coin, timeframe=selected_tf, limit=100)
 df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-# ২. অ্যাডভান্সড ইন্ডিকেটরস (ফাঁকফোকর বন্ধ করার জন্য)
-# RSI
+# ৪. বেসিক ইন্ডিকেটর
 df['rsi'] = 100 - (100 / (1 + (df['close'].diff().where(df['close'].diff() > 0, 0).rolling(14).mean() / (-df['close'].diff().where(df['close'].diff() < 0, 0)).rolling(14).mean())))
-# EMA 200 (মেইন ট্রেন্ড)
 df['ema_200'] = df['close'].ewm(span=200).mean()
-# MACD
-exp1 = df['close'].ewm(span=12, adjust=False).mean()
-exp2 = df['close'].ewm(span=26, adjust=False).mean()
-df['macd'] = exp1 - exp2
-df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
 
-# বর্তমান ডাটা
+# ৫. ব্যাকগ্রাউন্ড ইন্ডিকেটর (চার্টে দেখা যাবে না, শুধু বট বুঝবে)
+# MACD Calculation
+df['ema_12'] = df['close'].ewm(span=12).mean()
+df['ema_26'] = df['close'].ewm(span=26).mean()
+df['macd'] = df['ema_12'] - df['ema_26']
+df['macd_signal'] = df['macd'].ewm(span=9).mean()
+
+# Bollinger Bands Calculation (Volatility)
+df['sma_20'] = df['close'].rolling(20).mean()
+df['std_20'] = df['close'].rolling(20).std()
+df['bb_upper'] = df['sma_20'] + (df['std_20'] * 2)
+df['bb_lower'] = df['sma_20'] - (df['std_20'] * 2)
+
+support = df['low'].min()
+resistance = df['high'].max()
 curr_price = df['close'].iloc[-1]
 curr_rsi = df['rsi'].iloc[-1]
 curr_macd = df['macd'].iloc[-1]
-curr_signal = df['signal'].iloc[-1]
-curr_ema = df['ema_200'].iloc[-1]
+curr_macd_signal = df['macd_signal'].iloc[-1]
 
-# ৩. প্রিমিয়াম ড্যাশবোর্ড প্যানেল
+# ৬. প্রিমিয়াম ড্যাশবোর্ড প্যানেল
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("ETH Live Price", f"${curr_price:.2f}")
+col1.metric("Live Price", f"${curr_price:.2f}")
 col2.metric("RSI (Momentum)", f"{curr_rsi:.2f}")
-col3.metric("MACD Status", "Bullish" if curr_macd > curr_signal else "Bearish")
-col4.metric("Market Trend", "UPTREND" if curr_price > curr_ema else "DOWNTREND")
+col3.metric("Support Zone", f"${support:.2f}")
+col4.metric("Resistance Zone", f"${resistance:.2f}")
 
-# ৪. প্রফেশনাল চার্ট
-fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price')])
-fig.add_trace(go.Scatter(x=df.index, y=df['ema_200'], name='EMA 200', line=dict(color='orange', width=2)))
-fig.update_layout(template="plotly_dark", height=550, margin=dict(l=0, r=0, t=30, b=0))
+# ৭. ক্লিন প্রফেশনাল চার্ট (কোনো হিজিবিজি দাগ ছাড়া)
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8, 0.2], vertical_spacing=0.03)
+
+fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['ema_200'], name='EMA 200', line=dict(color='orange', width=2)), row=1, col=1)
+
+fig.add_hline(y=support, line_dash="dash", line_color="#00ff00", annotation_text="Support", row=1, col=1)
+fig.add_hline(y=resistance, line_dash="dash", line_color="#ff0000", annotation_text="Resistance", row=1, col=1)
+
+colors = ['#00ff00' if close >= open else '#ff0000' for open, close in zip(df['open'], df['close'])]
+fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors), row=2, col=1)
+
+fig.update_layout(template="plotly_dark", height=650, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False)
 st.plotly_chart(fig, use_container_width=True)
 
-# ৫. স্ট্রং সিগন্যাল ইঞ্জিন (৮০% কনফ্লুয়েন্স লজিক)
-st.subheader("🤖 BG STAR AI Engine (Confluence Signal)")
+# ৮. BG STAR AI: SMC ও ব্যাকগ্রাউন্ড ইঞ্জিন
+st.markdown("### 🧠 BG STAR Smart Money Engine (Hidden Analysis)")
 
-# যদি RSI ওভারসোল্ড হয় + MACD বুলিশ হয় + দাম EMA এর উপরে থাকে
-if curr_rsi < 35 and curr_macd > curr_signal and curr_price > curr_ema:
-    st.success("🟢 80% CONFIRMED BUY: সব ইন্ডিকেটর পজিটিভ। ঝুঁকি কম।")
-# যদি RSI ওভারবট হয় + MACD বিয়ারিশ হয় + দাম EMA এর নিচে থাকে
-elif curr_rsi > 65 and curr_macd < curr_signal and curr_price < curr_ema:
-    st.error("🔴 80% CONFIRMED SELL: সব ইন্ডিকেটর নেগেটিভ। মার্কেট পড়ার চান্স বেশি।")
+risk_reward_gap = resistance - support
+
+# ব্যাকগ্রাউন্ড লজিক (বট নিজে নিজে বুঝছে)
+smc_analysis = []
+if curr_macd > curr_macd_signal:
+    smc_analysis.append("MACD বুলিশ (Buyers এর পাওয়ার বেশি)।")
 else:
-    st.warning("⚪ NEUTRAL: মার্কেট এখন ঝুঁকিপূর্ণ (ফাঁকফোকর আছে)। ট্রেড থেকে দূরে থাকুন।")
+    smc_analysis.append("MACD বিয়ারিশ (Sellers এর পাওয়ার বেশি)।")
+
+if curr_price <= df['bb_lower'].iloc[-1] + 2:
+    smc_analysis.append("দাম Bollinger Band এর একদম নিচে, এখান থেকে বাউন্স করার বিশাল সুযোগ।")
+elif curr_price >= df['bb_upper'].iloc[-1] - 2:
+    smc_analysis.append("দাম Bollinger Band এর একদম ওপরে, এখান থেকে মার্কেট নিচে ক্র্যাশ করতে পারে।")
+
+# সিগন্যাল ইঞ্জিন
+if curr_price <= support + (risk_reward_gap * 0.15): 
+    sl = support - (support * 0.005)
+    tp1 = support + (risk_reward_gap * 0.5)
+    tp2 = resistance
+    
+    st.success(f"**🟢 WHALE BUY ZONE (Bullish Order Block):** দাম এখন তিমিদের (Smart Money) কেনার সিক্রেট জোনে চলে এসেছে। \n\n"
+               f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n"
+               f"* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
+
+elif curr_price >= resistance - (risk_reward_gap * 0.15): 
+    sl = resistance + (resistance * 0.005)
+    tp1 = resistance - (risk_reward_gap * 0.5)
+    tp2 = support
+    
+    st.error(f"**🔴 WHALE SELL ZONE (Bearish Order Block):** দাম এখন তিমিদের বিক্রি করার (Liquidity Trap) জায়গায় পৌঁছেছে। \n\n"
+             f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n"
+             f"* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${tp1:.2f} | 🎯 **TP2:** ${tp2:.2f} | 🛑 **SL:** ${sl:.2f}")
+
+else:
+    st.warning(f"**⚪ NO TRADE ZONE (Retail Trap):** মার্কেট এখন মাঝখানে আছে। এটি সাধারণ ট্রেডারদের ফাঁদে ফেলার জায়গা। স্মার্ট মানি এখন চুপচাপ আছে।\n\n"
+               f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}\n\n"
+               f"💡 **পরামর্শ:** কোনো ট্রেড নেবেন না। দাম ${support:.2f} বা ${resistance:.2f} এ আসার জন্য অপেক্ষা করুন।")
