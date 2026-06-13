@@ -17,51 +17,24 @@ def send_telegram_alert(message):
     except:
         pass
 
-st.set_page_config(page_title="BG STAR V6 PRO (Sniper Edition)", layout="wide")
+st.set_page_config(page_title="BG STAR V6 PRO", layout="wide")
 
-# ----------------- প্রিমিয়াম CSS (Binance & Gold Style) -----------------
+# হিজিবিজি মুক্ত একদম পরিষ্কার ও রেসপন্সিভ ডিজাইন
 st.markdown("""
     <style>
-    /* মেইন ব্যাকগ্রাউন্ড */
-    .stApp { background-color: #0B0E11; color: #EAECEF; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    
-    html, body, #root, [data-testid="stAppViewContainer"], .main {
+    html, body, #root, .stApp, [data-testid="stAppViewContainer"], .main {
         overscroll-behavior: none !important;
         overscroll-behavior-y: none !important;
     }
-    
-    /* প্রিমিয়াম মেট্রিক কার্ড */
-    div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #1E2329, #181A20);
-        padding: 20px; 
-        border-radius: 12px; 
-        border: 1px solid #2B3139; 
-        border-left: 5px solid #F3BA2F; 
-        box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-        transition: transform 0.2s;
-    }
-    div[data-testid="stMetric"]:hover { transform: translateY(-5px); }
-    
-    /* সিগন্যাল বক্স */
-    .premium-signal-box { 
-        background: linear-gradient(145deg, #181A20, #0B0E11); 
-        padding: 25px; 
-        border-radius: 15px; 
-        text-align: center; 
-        border: 1px solid #2B3139; 
-        box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-        margin-bottom: 25px;
-    }
-    .buy-glow { border-color: #0ECB81; box-shadow: 0 0 25px rgba(14, 203, 129, 0.2); border-bottom: 5px solid #0ECB81;}
-    .sell-glow { border-color: #F6465D; box-shadow: 0 0 25px rgba(246, 70, 93, 0.2); border-bottom: 5px solid #F6465D;}
-    .wait-glow { border-bottom: 5px solid #888888; }
-    
-    /* সাবটাইটেল */
-    h1, h2, h3 { color: #F3BA2F !important; font-weight: 700; }
+    .stMetric { background-color: #1E1E2E; padding: 15px; border-radius: 12px; border: 1px solid #333; border-left: 4px solid #f39c12; }
+    .signal-box { background-color: #1E1E2E; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 1px solid #333;}
+    .buy-box { border-bottom: 5px solid #00E676; box-shadow: 0px 4px 15px rgba(0, 230, 118, 0.15); }
+    .sell-box { border-bottom: 5px solid #FF1744; box-shadow: 0px 4px 15px rgba(255, 23, 68, 0.15); }
+    .wait-box { border-bottom: 5px solid #888888; }
     </style>
 """, unsafe_allow_html=True)
 
-# শুধুমাত্র বিটকয়েন রাখা হলো
+# শুধুমাত্র বিটকয়েন
 coins = ["BTC/USDT"]
 
 st.sidebar.title("⚙️ BG STAR Control")
@@ -70,7 +43,7 @@ chart_view = "BTC/USDT"
 selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
 auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 3s)", value=True)
 
-st.title(f"🎯 BG STAR V6 PRO (Sniper Edition - BTC Only)")
+st.title(f"🎯 BG STAR V6 PRO (Sniper Edition)")
 
 exchange = ccxt.kucoin()
 coin_data = {}
@@ -107,27 +80,27 @@ for coin in coins:
     coin_data[coin] = {'df': df, 'support': support, 'resistance': resistance, 'curr_price': curr_price, 'risk_reward_gap': risk_reward_gap, 'trend_4h': trend_4h, 'curr_vol': curr_vol, 'vol_sma': vol_sma, 'curr_rsi': curr_rsi}
     
     signal_text = "⚪ WAIT"
-    box_class = "wait-glow"
-    price_color = "#F3BA2F"
+    box_class = "wait-box"
+    price_color = "#f39c12"
     
     is_volume_high = curr_vol > vol_sma  
     
     if curr_price <= buy_zone and trend_4h == "BULLISH" and is_volume_high and curr_rsi < 40:
         signal_text = "🟢 SNIPER BUY"
-        box_class = "buy-glow"
-        price_color = "#0ECB81"
+        box_class = "buy-box"
+        price_color = "#00E676"
         play_sound = True
         send_telegram_alert(f"🟢 SNIPER BUY ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bullish 🚀\nTimeframe: {selected_tf}")
         
-    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high and curr_rsi > 60:
+    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high Image context and curr_rsi > 60:
         signal_text = "🔴 SNIPER SELL"
-        box_class = "sell-glow"
-        price_color = "#F6465D"
+        box_class = "sell-box"
+        price_color = "#FF1744"
         play_sound = True
         send_telegram_alert(f"🔴 SNIPER SELL ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bearish 📉\nTimeframe: {selected_tf}")
         
     with col2:
-        st.markdown(f'<div class="premium-signal-box {box_class}"><b>{coin}</b><br><span style="font-size:35px; font-weight:bold; color:{price_color};">${curr_price:.2f}</span><br><span style="font-size:18px;">{signal_text}</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="signal-box {box_class}"><b>{coin}</b><br><span style="font-size:32px; font-weight:bold; color:{price_color};">${curr_price:.2f}</span><br><span style="font-size:18px; font-weight:bold;">{signal_text}</span></div>', unsafe_allow_html=True)
 
 if play_sound:
     st.toast("🔔 SNIPER SIGNAL DETECTED!", icon="🔔")
@@ -141,53 +114,54 @@ support = sel_data['support']
 resistance = sel_data['resistance']
 risk_reward_gap = sel_data['risk_reward_gap']
 
-st.subheader(f"Deep Analysis: {chart_view} ({selected_tf})")
+# ৪টি প্রধান মেট্রিকস একদম পরিষ্কার লাইনে দেখাবে
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Live Price", f"${curr_price:.2f}")
 m2.metric("4H Big Trend", sel_data['trend_4h'])
 m3.metric("Support Zone", f"${support:.2f}")
 m4.metric("Resistance Zone", f"${resistance:.2f}")
 
+# 📊 ক্যান্ডেলস্টিক চার্ট সরাসরি স্ক্রিনে থাকবে
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8, 0.2], vertical_spacing=0.03)
-fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], 
-                             increasing_line_color='#0ECB81', decreasing_line_color='#F6465D', name='Price'), row=1, col=1)
-fig.add_trace(go.Scatter(x=df.index, y=df['ema_200'], name='EMA 200', line=dict(color='#F3BA2F', width=2)), row=1, col=1)
-fig.add_hline(y=support, line_dash="dash", line_color="#0ECB81", annotation_text="Support", annotation_font_color="#0ECB81", row=1, col=1)
-fig.add_hline(y=resistance, line_dash="dash", line_color="#F6465D", annotation_text="Resistance", annotation_font_color="#F6465D", row=1, col=1)
-
-colors = ['#0ECB81' if close >= open else '#F6465D' for open, close in zip(df['open'], df['close'])]
+fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['ema_200'], name='EMA 200', line=dict(color='orange', width=2)), row=1, col=1)
+fig.add_hline(y=support, line_dash="dash", line_color="#00ff00", row=1, col=1)
+fig.add_hline(y=resistance, line_dash="dash", line_color="#ff0000", row=1, col=1)
+colors = ['#00ff00' if close >= open else '#ff0000' for open, close in zip(df['open'], df['close'])]
 fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors), row=2, col=1)
-
-fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#2B3139')
-fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#2B3139')
+fig.update_layout(template="plotly_dark", height=450, margin=dict(l=0, r=0, t=10, b=0), xaxis_rangeslider_visible=False)
 st.plotly_chart(fig, use_container_width=True)
 
-st.markdown("### 🧠 BG STAR SMC Sniper Engine")
-smc_analysis = []
-smc_analysis.append(f"**বড় ট্রেন্ড (4h):** {sel_data['trend_4h']}।")
+st.markdown("---")
 
-if sel_data['curr_vol'] > sel_data['vol_sma']:
-    smc_analysis.append("**ভলিউম:** মার্কেটে এখন বড় ট্রেডারদের টাকা ঢুকছে (High Volume)।")
-else:
-    smc_analysis.append("**ভলিউম:** মার্কেটে এখন ভলিউম কম (Retailers Trap হতে পারে)।")
+# 📥 আপনার আইডিয়া অনুযায়ী টেক্সটগুলোকে সুন্দর করে ড্রপডাউন প্যানেলে লুকিয়ে দেওয়া হলো
+with st.expander("🔍 এখানে টিপুন: বিস্তারিত AI এবং SMC ব্যাকগ্রাউন্ড রিপোর্ট"):
+    st.markdown("### 🧠 BG STAR SMC Sniper Engine এনালাইসিস")
+    smc_analysis = []
+    smc_analysis.append(f"**বড় ট্রেন্ড (4h):** {sel_data['trend_4h']}।")
 
-if curr_price <= support + (risk_reward_gap * 0.15): 
-    st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
-    if sel_data['trend_4h'] == "BULLISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] < 40:
-        st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.015):.2f}")
+    if sel_data['curr_vol'] > sel_data['vol_sma']:
+        smc_analysis.append("**ভলিউম:** মার্কেটে এখন বড় ট্রেডারদের টাকা ঢুকছে (High Volume)।")
     else:
-        st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই কিনবেন না।")
+        smc_analysis.append("**ভলিউম:** মার্কেটে এখন ভলিউম কম (Retailers Trap হতে পারে)।")
 
-elif curr_price >= resistance - (risk_reward_gap * 0.15): 
-    st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
-    if sel_data['trend_4h'] == "BEARISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] > 60:
-        st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.015):.2f}")
+    st.info(f"**📊 লাইভ মার্কেট ডাটা রিপোর্ট:** {' '.join(smc_analysis)}")
+
+    if curr_price <= support + (risk_reward_gap * 0.15): 
+        if sel_data['trend_4h'] == "BULLISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] < 40:
+            st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.015):.2f}")
+        else:
+            st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই কিনবেন না।")
+
+    elif curr_price >= resistance - (risk_reward_gap * 0.15): 
+        if sel_data['trend_4h'] == "BEARISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] > 60:
+            st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.015):.2f}")
+        else:
+            st.warning("⚠️ রেজিস্টেন্স জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই বিক্রি করবেন না।")
     else:
-        st.warning("⚠️ রেজিস্টেন্স জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই বিক্রি করবেন না।")
-else:
-    st.write("⚪ নো-ট্রেড জোন। পারফেক্ট স্নাইপার এন্ট্রির জন্য অপেক্ষা করুন।")
+        st.write("⚪ নো-ট্রেড জোন। পারফেক্ট স্নাইপার এন্ট্রির জন্য অপেক্ষা করুন।")
 
 if auto_refresh:
     time.sleep(3)
     st.rerun()
+    
