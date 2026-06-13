@@ -142,14 +142,16 @@ else:
 if curr_price <= support + (risk_reward_gap * 0.15): 
     st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
     if sel_data['trend_4h'] == "BULLISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] < 40:
-        st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.005):.2f}")
+        # স্টপ লস আপডেট করা হলো: 1.5% (0.015)
+        st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.015):.2f}")
     else:
         st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই কিনবেন না।")
 
 elif curr_price >= resistance - (risk_reward_gap * 0.15): 
     st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
     if sel_data['trend_4h'] == "BEARISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] > 60:
-        st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.005):.2f}")
+        # স্টপ লস আপডেট করা হলো: 1.5% (0.015)
+        st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.015):.2f}")
     else:
         st.warning("⚠️ রেজিস্টেন্স জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই বিক্রি করবেন না।")
 else:
@@ -158,3 +160,4 @@ else:
 if auto_refresh:
     time.sleep(3)
     st.rerun()
+    
