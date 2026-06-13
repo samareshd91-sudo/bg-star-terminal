@@ -92,7 +92,7 @@ for coin in coins:
         play_sound = True
         send_telegram_alert(f"🟢 SNIPER BUY ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bullish 🚀\nTimeframe: {selected_tf}")
         
-    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high Image context and curr_rsi > 60:
+    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high and curr_rsi > 60:
         signal_text = "🔴 SNIPER SELL"
         box_class = "sell-box"
         price_color = "#FF1744"
@@ -164,4 +164,3 @@ with st.expander("🔍 এখানে টিপুন: বিস্তারি
 if auto_refresh:
     time.sleep(3)
     st.rerun()
-    
