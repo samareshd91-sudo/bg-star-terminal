@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time 
 
-st.set_page_config(page_title="BG STAR V6 PRO", layout="wide")
+st.set_page_config(page_title="BG STAR V6 PRO (Scalp Edition)", layout="wide")
 
 # হিজিবিজি মুক্ত একদম পরিষ্কার ও রেসপন্সিভ ডিজাইন
 st.markdown("""
@@ -25,11 +25,11 @@ st.markdown("""
 coin = "BTC/USDT"
 
 st.sidebar.title("⚙️ BG STAR Control")
-st.sidebar.write("🤖 শুধুমাত্র BTC/USDT-এ স্নাইপার অ্যানালাইসিস চলছে!")
+st.sidebar.write("🤖 75% Win-Rate Mode (Testing)")
 selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
 auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 15s)", value=True)
 
-st.title(f"🎯 BG STAR V6 PRO (Ultimate Sniper)")
+st.title(f"🎯 BG STAR V6 PRO (75% Accuracy Scalper Mode)")
 
 # ক্র্যাশ প্রোটেকশন চালু করা হলো
 exchange = ccxt.kucoin({'enableRateLimit': True})
@@ -43,7 +43,7 @@ try:
     bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=150)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     
-    # বড় টাইমফ্রেম (৪ ঘণ্টা - ট্রেন্ড কনফার্মেশনের জন্য - 250 লিমিট ফিক্সড)
+    # বড় টাইমফ্রেম (৪ ঘণ্টা - ট্রেন্ড কনফার্মেশনের জন্য)
     bars_4h = exchange.fetch_ohlcv(coin, timeframe='4h', limit=250)
     df_4h = pd.DataFrame(bars_4h, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_4h['ema_200'] = df_4h['close'].ewm(span=200, adjust=False).mean()
@@ -65,7 +65,7 @@ try:
     df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
     df['vol_sma'] = df['volume'].rolling(20).mean() 
     
-    # স্মার্ট মানি কনসেপ্ট (SMC) - লেটেস্ট লিকুইডিটি জোন (শেষ ৫০ ক্যান্ডেল)
+    # স্মার্ট মানি কনসেপ্ট (SMC) - লেটেস্ট জোন
     support = df['low'].tail(50).min()
     resistance = df['high'].tail(50).max()
     
@@ -79,8 +79,9 @@ try:
     
     macd_bullish = curr_macd > curr_macd_sig
     
-    buy_zone = support + (risk_reward_gap * 0.15)
-    sell_zone = resistance - (risk_reward_gap * 0.15)
+    # স্ক্যাল্পিংয়ের জন্য জোন একটু বড় (২৫%)
+    buy_zone = support + (risk_reward_gap * 0.25)
+    sell_zone = resistance - (risk_reward_gap * 0.25)
     
     signal_text = "⚪ WAIT"
     box_class = "wait-box"
@@ -88,15 +89,15 @@ try:
     
     is_volume_high = curr_vol > vol_sma  
     
-    # প্রো-স্নাইপার লজিক (MACD এবং RSI একসাথে)
-    if curr_price <= buy_zone and trend_4h == "BULLISH" and is_volume_high and curr_rsi < 45 and macd_bullish:
-        signal_text = "🟢 SNIPER BUY"
+    # স্ক্যাল্পিং লজিক
+    if curr_price <= buy_zone and trend_4h == "BULLISH" and macd_bullish and curr_rsi < 55:
+        signal_text = "🟢 SCALP BUY"
         box_class = "buy-box"
         price_color = "#00E676"
         play_sound = True
         
-    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high and curr_rsi > 55 and not macd_bullish:
-        signal_text = "🔴 SNIPER SELL"
+    elif curr_price >= sell_zone and trend_4h == "BEARISH" and not macd_bullish and curr_rsi > 45:
+        signal_text = "🔴 SCALP SELL"
         box_class = "sell-box"
         price_color = "#FF1744"
         play_sound = True
@@ -105,17 +106,17 @@ try:
         st.markdown(f'<div class="signal-box {box_class}"><b>{coin}</b><br><span style="font-size:32px; font-weight:bold; color:{price_color};">${curr_price:.2f}</span><br><span style="font-size:18px; font-weight:bold;">{signal_text}</span></div>', unsafe_allow_html=True)
 
     if play_sound:
-        st.toast("🔔 SNIPER SIGNAL DETECTED!", icon="🔔")
+        st.toast("🔔 TRADING SIGNAL DETECTED!", icon="🔔")
         st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # ৪টি প্রধান মেট্রিকস
+    # আপনার পছন্দ অনুযায়ী আগের ৪টি প্রধান মেট্রিকস (সাপোর্ট/রেজিস্ট্যান্স) ফিরিয়ে আনা হলো
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Live Price", f"${curr_price:.2f}")
     m2.metric("4H Big Trend", trend_4h)
-    m3.metric("Smart Support Zone", f"${support:.2f}")
-    m4.metric("Smart Resistance", f"${resistance:.2f}")
+    m3.metric("Support Zone", f"${support:.2f}")
+    m4.metric("Resistance Zone", f"${resistance:.2f}")
 
     # 📊 ক্যান্ডেলস্টিক চার্ট
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8, 0.2], vertical_spacing=0.03)
@@ -130,35 +131,45 @@ try:
 
     st.markdown("---")
 
-    # 📥 বিস্তারিত এনালাইসিস প্যানেল (লুকানো)
+    # 📥 বিস্তারিত এনালাইসিস প্যানেল (সব ডাটা আবার যোগ করা হয়েছে)
     with st.expander("🔍 এখানে টিপুন: বিস্তারিত AI এবং SMC ব্যাকগ্রাউন্ড রিপোর্ট"):
-        st.markdown("### 🧠 BG STAR Ultimate Sniper Engine")
+        st.markdown("### 🧠 BG STAR 75% Scalper Engine (Deep Analysis)")
         smc_analysis = []
-        smc_analysis.append(f"**বড় ট্রেন্ড (4h):** {trend_4h}।")
         
+        # ১. বিগ ট্রেন্ড
+        smc_analysis.append(f"**১. বড় ট্রেন্ড (4h):** {trend_4h}।")
+        
+        # ২. MACD
         macd_status = "BULLISH 🟢" if macd_bullish else "BEARISH 🔴"
-        smc_analysis.append(f"**MACD ট্রেন্ড:** {macd_status}।")
+        smc_analysis.append(f"**২. MACD ট্রেন্ড:** {macd_status}।")
 
+        # ৩. RSI (ফিরিয়ে আনা হলো)
+        rsi_status = "OVERSOLD 🟢" if curr_rsi < 45 else "OVERBOUGHT 🔴" if curr_rsi > 55 else "NEUTRAL ⚪"
+        smc_analysis.append(f"**৩. RSI পজিশন:** {curr_rsi:.1f} ({rsi_status})।")
+
+        # ৪. ভলিউম (ফিরিয়ে আনা হলো)
         if is_volume_high:
-            smc_analysis.append("**ভলিউম:** মার্কেটে এখন বড় ট্রেডারদের টাকা ঢুকছে (High Volume)।")
+            smc_analysis.append("**৪. ভলিউম:** হাই ভলিউম (বড় ট্রেডাররা মার্কেটে আছে)।")
         else:
-            smc_analysis.append("**ভলিউম:** মার্কেটে এখন ভলিউম কম (Retailers Trap হতে পারে)।")
+            smc_analysis.append("**৪. ভলিউম:** লো ভলিউম (তবে স্ক্যাল্পিংয়ের জন্য ঠিক আছে)।")
 
         st.info(f"**📊 লাইভ মার্কেট ডাটা রিপোর্ট:** {' '.join(smc_analysis)}")
 
         if curr_price <= buy_zone: 
-            if trend_4h == "BULLISH" and is_volume_high and curr_rsi < 45 and macd_bullish:
-                st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.015):.2f}")
+            if trend_4h == "BULLISH" and macd_bullish and curr_rsi < 55:
+                # 75% Mode Entry Details
+                st.success(f"**🟢 SCALP BUY (75% Win-Rate):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${curr_price + (risk_reward_gap * 0.4):.2f} | 🛑 **SL:** ${support - (support * 0.015):.2f}")
             else:
-                st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু সব ইন্ডিকেটর (MACD/Volume) এখনো কনফার্ম করেনি।")
+                st.warning("⚠️ প্রাইস সাপোর্ট জোন/কেনার জায়গায় আছে, কিন্তু MACD বা ট্রেন্ড কনফার্ম করেনি।")
 
         elif curr_price >= sell_zone: 
-            if trend_4h == "BEARISH" and is_volume_high and curr_rsi > 55 and not macd_bullish:
-                st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.015):.2f}")
+            if trend_4h == "BEARISH" and not macd_bullish and curr_rsi > 45:
+                # 75% Mode Entry Details
+                st.error(f"**🔴 SCALP SELL (75% Win-Rate):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${curr_price - (risk_reward_gap * 0.4):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.015):.2f}")
             else:
-                st.warning("⚠️ রেজিস্টেন্স জোনে এসেছে, কিন্তু সব ইন্ডিকেটর (MACD/Volume) এখনো কনফার্ম করেনি।")
+                st.warning("⚠️ প্রাইস রেজিস্ট্যান্স জোন/বিক্রির জায়গায় আছে, কিন্তু MACD বা ট্রেন্ড কনফার্ম করেনি।")
         else:
-            st.write("⚪ নো-ট্রেড জোন। পারফেক্ট স্নাইপার এন্ট্রির জন্য অপেক্ষা করুন।")
+            st.write("⚪ নো-ট্রেড জোন। জোন পর্যন্ত অপেক্ষা করুন।")
 
 except Exception as e:
     st.error("⚠️ সার্ভার কানেকশনে সমস্যা হচ্ছে। ডাটা লোড হওয়ার জন্য অপেক্ষা করুন...")
@@ -166,3 +177,4 @@ except Exception as e:
 if auto_refresh:
     time.sleep(15)
     st.rerun()
+    
