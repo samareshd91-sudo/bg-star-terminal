@@ -6,8 +6,8 @@ from plotly.subplots import make_subplots
 import time 
 import requests 
 
-# টেলিগ্রাম সেটিং (আপনার দেওয়া চাবি)
-TELEGRAM_BOT_TOKEN = "8984445181:AAFOYd152-jXhmlEMhhmmZE10sFNtJ6GRpM"
+# টেলিগ্রাম সেটিং (তোমার নতুন টোকেনটি এখানে বসাও)
+TELEGRAM_BOT_TOKEN = "YOUR_NEW_TOKEN_HERE"
 TELEGRAM_CHAT_ID = "8614370967"
 
 def send_telegram_alert(message):
@@ -50,7 +50,7 @@ cols = st.columns(4)
 
 # 🧠 সুপার স্ক্যানার লুপ
 for i, coin in enumerate(coins):
-    # ছোট টাইমফ্রেম (এন্ট্রির জন্য)
+    # ছোট টাইমফ্রেম
     bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=100)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     
@@ -60,11 +60,22 @@ for i, coin in enumerate(coins):
     df_4h['ema_200'] = df_4h['close'].ewm(span=200).mean()
     trend_4h = "BULLISH" if df_4h['close'].iloc[-1] > df_4h['ema_200'].iloc[-1] else "BEARISH"
     
-    # ইন্ডিকেটর
+    # --- ইন্ডিকেটর ক্যালকুলেশন ---
+    # 1. RSI
     df['rsi'] = 100 - (100 / (1 + (df['close'].diff().where(df['close'].diff() > 0, 0).rolling(14).mean() / (-df['close'].diff().where(df['close'].diff() < 0, 0)).rolling(14).mean())))
-    df['ema_200'] = df['close'].ewm(span=200).mean()
-    df['vol_sma'] = df['volume'].rolling(20).mean() # ভলিউম চেকার
     
+    # 2. MACD
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    df['macd_hist'] = df['macd'] - df['macd_signal']
+    
+    # 3. Volume & EMA
+    df['ema_200'] = df['close'].ewm(span=200).mean()
+    df['vol_sma'] = df['volume'].rolling(20).mean() 
+    
+    # লাইভ ভ্যালু
     support = df['low'].min()
     resistance = df['high'].max()
     curr_price = df['close'].iloc[-1]
@@ -73,28 +84,36 @@ for i, coin in enumerate(coins):
     vol_sma = df['vol_sma'].iloc[-1]
     risk_reward_gap = resistance - support
     
-    buy_zone = support + (risk_reward_gap * 0.15)
-    sell_zone = resistance - (risk_reward_gap * 0.15)
+    curr_macd = df['macd'].iloc[-1]
+    curr_macd_sig = df['macd_signal'].iloc[-1]
+    macd_bullish = curr_macd > curr_macd_sig # MACD Crossover Check
     
-    coin_data[coin] = {'df': df, 'support': support, 'resistance': resistance, 'curr_price': curr_price, 'risk_reward_gap': risk_reward_gap, 'trend_4h': trend_4h, 'curr_vol': curr_vol, 'vol_sma': vol_sma, 'curr_rsi': curr_rsi}
+    buy_zone = support + (risk_reward_gap * 0.20) # জোন একটু বাড়ানো হলো সিগন্যাল পাওয়ার জন্য
+    sell_zone = resistance - (risk_reward_gap * 0.20)
+    
+    coin_data[coin] = {
+        'df': df, 'support': support, 'resistance': resistance, 'curr_price': curr_price, 
+        'risk_reward_gap': risk_reward_gap, 'trend_4h': trend_4h, 'curr_vol': curr_vol, 
+        'vol_sma': vol_sma, 'curr_rsi': curr_rsi, 'macd_bullish': macd_bullish
+    }
     
     signal_text = "⚪ WAIT"
     box_class = "wait-box"
     
-    # স্নাইপার লজিক (৩টি কনফ্লুয়েন্স মেলালে তবেই সিগন্যাল)
-    is_volume_high = curr_vol > vol_sma  # ভলিউম কনফার্মেশন
+    # স্নাইপার লজিক (SMC + MACD + RSI)
+    is_volume_high = curr_vol > vol_sma 
     
-    if curr_price <= buy_zone and trend_4h == "BULLISH" and is_volume_high and curr_rsi < 40:
+    if curr_price <= buy_zone and trend_4h == "BULLISH" and curr_rsi < 45 and macd_bullish:
         signal_text = "🟢 SNIPER BUY"
         box_class = "buy-box"
         play_sound = True
-        send_telegram_alert(f"🟢 SNIPER BUY ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bullish 🚀\nTimeframe: {selected_tf}")
+        send_telegram_alert(f"🟢 SNIPER BUY ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bullish\nRSI: {curr_rsi:.2f} (Oversold)\nMACD: Bullish Crossover 🚀")
         
-    elif curr_price >= sell_zone and trend_4h == "BEARISH" and is_volume_high and curr_rsi > 60:
+    elif curr_price >= sell_zone and trend_4h == "BEARISH" and curr_rsi > 55 and not macd_bullish:
         signal_text = "🔴 SNIPER SELL"
         box_class = "sell-box"
         play_sound = True
-        send_telegram_alert(f"🔴 SNIPER SELL ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bearish 📉\nTimeframe: {selected_tf}")
+        send_telegram_alert(f"🔴 SNIPER SELL ALERT!\nCoin: {coin}\nPrice: ${curr_price:.2f}\nTrend: Bearish\nRSI: {curr_rsi:.2f} (Overbought)\nMACD: Bearish Crossover 📉")
         
     with cols[i]:
         st.markdown(f'<div class="signal-box {box_class}"><b>{coin}</b><br>${curr_price:.2f}<br>{signal_text}</div>', unsafe_allow_html=True)
@@ -104,6 +123,8 @@ if play_sound:
     st.markdown('<audio autoplay><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>', unsafe_allow_html=True)
 
 st.markdown("---")
+
+# --- Deep Analysis Section ---
 sel_data = coin_data[chart_view]
 df = sel_data['df']
 curr_price = sel_data['curr_price']
@@ -112,47 +133,75 @@ resistance = sel_data['resistance']
 risk_reward_gap = sel_data['risk_reward_gap']
 
 st.subheader(f"Deep Analysis: {chart_view} ({selected_tf})")
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Live Price", f"${curr_price:.2f}")
-m2.metric("4H Big Trend", sel_data['trend_4h'])
-m3.metric("Support Zone", f"${support:.2f}")
-m4.metric("Resistance Zone", f"${resistance:.2f}")
 
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8, 0.2], vertical_spacing=0.03)
+# মেট্রিকস প্যানেল
+c1, c2, c3 = st.columns(3)
+c1.metric("Live Price", f"${curr_price:.2f}")
+c2.metric("Support Zone", f"${support:.2f}")
+c3.metric("Resistance Zone", f"${resistance:.2f}")
+
+c4, c5, c6 = st.columns(3)
+c4.metric("4H Big Trend", sel_data['trend_4h'])
+
+# RSI Status
+rsi_status = "OVERBOUGHT 🔴" if sel_data['curr_rsi'] > 65 else "OVERSOLD 🟢" if sel_data['curr_rsi'] < 35 else "NEUTRAL ⚪"
+c5.metric("RSI (14) Status", f"{sel_data['curr_rsi']:.2f}", rsi_status)
+
+# MACD Status
+macd_status = "BULLISH Crossover 🟢" if sel_data['macd_bullish'] else "BEARISH Crossover 🔴"
+c6.metric("MACD Trend", macd_status)
+
+# --- Advanced Charting (Price + Volume + MACD) ---
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_heights=[0.6, 0.2, 0.2], vertical_spacing=0.03)
+
+# 1. Price Chart
 fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
 fig.add_trace(go.Scatter(x=df.index, y=df['ema_200'], name='EMA 200', line=dict(color='orange', width=2)), row=1, col=1)
 fig.add_hline(y=support, line_dash="dash", line_color="#00ff00", annotation_text="Support", row=1, col=1)
 fig.add_hline(y=resistance, line_dash="dash", line_color="#ff0000", annotation_text="Resistance", row=1, col=1)
-colors = ['#00ff00' if close >= open else '#ff0000' for open, close in zip(df['open'], df['close'])]
-fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors), row=2, col=1)
-fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False)
+
+# 2. Volume Chart
+colors_vol = ['#00ff00' if close >= open else '#ff0000' for open, close in zip(df['open'], df['close'])]
+fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors_vol), row=2, col=1)
+
+# 3. MACD Chart
+fig.add_trace(go.Scatter(x=df.index, y=df['macd'], name='MACD Line', line=dict(color='#00BFFF', width=2)), row=3, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['macd_signal'], name='Signal Line', line=dict(color='#FF8C00', width=2)), row=3, col=1)
+colors_macd = ['#00ff00' if val >= 0 else '#ff0000' for val in df['macd_hist']]
+fig.add_trace(go.Bar(x=df.index, y=df['macd_hist'], name='MACD Hist', marker_color=colors_macd), row=3, col=1)
+
+fig.update_layout(template="plotly_dark", height=700, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False)
 st.plotly_chart(fig, use_container_width=True)
 
-st.markdown("### 🧠 BG STAR SMC Sniper Engine")
+# --- AI BG STAR Report ---
+st.markdown("### 🧠 BG STAR SMC & Sniper Engine Report")
 smc_analysis = []
-smc_analysis.append(f"**বড় ট্রেন্ড (4h):** {sel_data['trend_4h']}।")
+smc_analysis.append(f"**১. বিগ ট্রেন্ড (4h):** {sel_data['trend_4h']}।")
+smc_analysis.append(f"**২. RSI পজিশন:** {sel_data['curr_rsi']:.1f} ({rsi_status})।")
+smc_analysis.append(f"**৩. MACD মোমেন্টাম:** {macd_status}।")
 
 if sel_data['curr_vol'] > sel_data['vol_sma']:
-    smc_analysis.append("**ভলিউম:** মার্কেটে এখন বড় ট্রেডারদের টাকা ঢুকছে (High Volume)।")
+    smc_analysis.append("**৪. ভলিউম:** হাই ভলিউম (বড় ট্রেডাররা মার্কেটে আছে)।")
 else:
-    smc_analysis.append("**ভলিউম:** মার্কেটে এখন ভলিউম কম (Retailers Trap হতে পারে)।")
+    smc_analysis.append("**৪. ভলিউম:** লো ভলিউম (ফেক মুভমেন্ট হতে পারে)।")
 
-if curr_price <= support + (risk_reward_gap * 0.15): 
-    st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
-    if sel_data['trend_4h'] == "BULLISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] < 40:
-        st.success(f"**🟢 PERFECT BUY (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.005):.2f}")
-    else:
-        st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই কিনবেন না।")
+st.info(f"**🔍 বর্তমান মার্কেট সামারি:** {' '.join(smc_analysis)}")
 
-elif curr_price >= resistance - (risk_reward_gap * 0.15): 
-    st.info(f"**🔍 AI ব্যাকগ্রাউন্ড রিপোর্ট:** {' '.join(smc_analysis)}")
-    if sel_data['trend_4h'] == "BEARISH" and sel_data['curr_vol'] > sel_data['vol_sma'] and sel_data['curr_rsi'] > 60:
-        st.error(f"**🔴 PERFECT SELL (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.005):.2f}")
+if curr_price <= support + (risk_reward_gap * 0.20): 
+    if sel_data['trend_4h'] == "BULLISH" and sel_data['macd_bullish'] and sel_data['curr_rsi'] < 45:
+        st.success(f"**🟢 PERFECT BUY CONFIRMED (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${support + (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${support - (support * 0.005):.2f}")
     else:
-        st.warning("⚠️ রেজিস্টেন্স জোনে এসেছে, কিন্তু বড় ট্রেন্ড বা ভলিউম কনফার্ম করেনি। এখনই বিক্রি করবেন না।")
+        st.warning("⚠️ সাপোর্ট জোনে এসেছে, কিন্তু MACD বা RSI এখনো 'Buy' কনফার্ম করেনি। অপেক্ষা করুন।")
+
+elif curr_price >= resistance - (risk_reward_gap * 0.20): 
+    if sel_data['trend_4h'] == "BEARISH" and not sel_data['macd_bullish'] and sel_data['curr_rsi'] > 55:
+        st.error(f"**🔴 PERFECT SELL CONFIRMED (Sniper Entry):** \n* **Entry:** ${curr_price:.2f} | 🎯 **TP1:** ${resistance - (risk_reward_gap * 0.5):.2f} | 🛑 **SL:** ${resistance + (resistance * 0.005):.2f}")
+    else:
+        st.warning("⚠️ রেজিস্ট্যান্স জোনে এসেছে, কিন্তু MACD বা RSI এখনো 'Sell' কনফার্ম করেনি। অপেক্ষা করুন।")
 else:
-    st.write("⚪ নো-ট্রেড জোন। পারফেক্ট স্নাইপার এন্ট্রির জন্য অপেক্ষা করুন।")
+    st.write("⚪ মার্কেট এখন নো-ট্রেড জোনে (মাঝামাঝি) আছে। সাপোর্ট বা রেজিস্ট্যান্সে যাওয়ার জন্য অপেক্ষা করুন।")
 
 if auto_refresh:
     time.sleep(3)
     st.rerun()
+    
