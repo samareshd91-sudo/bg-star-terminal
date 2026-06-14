@@ -14,7 +14,6 @@ st.markdown("""
         background-color: #0B0E11 !important;
         color: #EAECEF !important;
         overscroll-behavior: none !important; 
-        touch-action: pan-x !important; /* মোবাইলে শুধু ডানে-বামে স্ক্রল অ্যালাউ করবে */
     }
     .brand-title {
         font-size: 36px;
@@ -75,7 +74,7 @@ st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | GLOBAL SIGNAL 
 # 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট দেখার সময় এটি বন্ধ রাখুন)", value=True)
+    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট জুম করার সময় এটি অফ রাখুন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -204,32 +203,30 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
-        # 📱 Ultimate Mobile Friendly Fixes 📱
+        # 📱 Ultimate Mobile Pinch-to-Zoom Fixes 📱
         fig.update_layout(
             template="plotly_dark", 
-            height=350, # মোবাইলের জন্য হাইট একটু কমানো হলো যাতে পুরোটা স্ক্রিনে ধরে
+            height=380, 
             margin=dict(l=10, r=10, t=10, b=10), 
             xaxis_rangeslider_visible=False,
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(0,0,0,0)', 
             font=dict(color='#848E9C'),
-            dragmode='pan', # ডিফল্ট প্যান মোড
-            hovermode=False # 🛑 বিরক্তিকর পপ-আপ বক্স পুরোপুরি অফ করা হলো
+            dragmode='pan', # এক আঙুল দিয়ে ডানে-বামে সরানোর জন্য
+            hovermode=False # কালো পপ-আপ বক্স বন্ধ করা হলো
         )
         
-        # 🛑 Y-Axis Lock: ওপর-নিচে টানাটানি করা বন্ধ করা হলো 
-        fig.update_yaxes(fixedrange=True)
-        
-        # ✅ X-Axis Free: শুধু ডানে-বামে সরবে 
+        # ✅ দুটো অক্ষই আনলক করা হলো, যাতে দুই আঙুল দিয়ে ইচ্ছেমতো জুম করা যায়
         fig.update_xaxes(fixedrange=False)
+        fig.update_yaxes(fixedrange=False)
         
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={
-                'displayModeBar': False, # চার্টের ওপরের টুলবার লুকানো হলো
-                'scrollZoom': False, # ভুল করে জুম হওয়া বন্ধ করা হলো
-                'doubleClick': 'reset'
+                'displayModeBar': False, # মেনুবার লুকানো
+                'scrollZoom': True, # 🟢 দুই আঙুল দিয়ে জুম করার আসল সুইচ!
+                'doubleClick': 'reset' # চার্টের ওপর ডাবল ট্যাপ করলে আবার আগের অবস্থায় ফিরে আসবে
             }
         )
 
