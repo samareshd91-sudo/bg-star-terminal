@@ -59,27 +59,19 @@ st.markdown("""
     hr { border-color: #2B3139; margin: 15px 0; }
     
     .streamlit-expanderContent { color: #EAECEF !important; }
-    
-    /* Risk Calculator Box */
-    .risk-box {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-left: 4px solid #00BFFF;
-        padding: 15px;
-        border-radius: 8px;
-        margin-top: 15px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "15m" 
 
+# ================= 🧠 Permanent Memory Setup =================
 if 'active_coin' not in st.session_state:
     st.session_state.active_coin = "BTC/USDT"
 if 'user_capital' not in st.session_state:
-    st.session_state.user_capital = 100.0
+    st.session_state['user_capital'] = 100.0
 if 'user_risk' not in st.session_state:
-    st.session_state.user_risk = 2.0
+    st.session_state['user_risk'] = 2.0
 
 st.markdown('<div class="brand-title">BG STAR PRO TERMINAL</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | AI CANDLE & RISK MANAGER ACTIVE</div>', unsafe_allow_html=True)
@@ -87,14 +79,13 @@ st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | AI CANDLE & RI
 # 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট দেখার সময় এটি অফ রাখুন)", value=True)
+    auto_refresh = st.toggle("🟢 Live Auto-Refresh (ফান্ড লেখার সময় এটি অফ করে নিতে পারেন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
         bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # EMA ও অন্যান্য ইন্ডিকেটর
         df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
         df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
@@ -122,7 +113,7 @@ def fetch_coin_radar(coin):
         local_support = df['low'].tail(15).min()
         local_resistance = df['high'].tail(15).max()
         
-        # ================= 🕯️ AI Candlestick Recognition Engine =================
+        # 🕯️ AI Candlestick Engine
         curr_O, curr_C, curr_H, curr_L = df['open'].iloc[-1], df['close'].iloc[-1], df['high'].iloc[-1], df['low'].iloc[-1]
         prev_O, prev_C = df['open'].iloc[-2], df['close'].iloc[-2]
         
@@ -136,22 +127,22 @@ def fetch_coin_radar(coin):
         pattern_type = "NEUTRAL"
         
         if curr_body <= 0.1 * curr_range:
-            pattern_text = "ডোজি (Doji) - বায়ার/সেলার কনফিউজড"
+            pattern_text = "ডোজি (Doji) - কনফিউজড"
             pattern_type = "NEUTRAL"
         elif curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body:
-            pattern_text = "হ্যামার (Hammer) - বায়াররা মার্কেট তুলছে"
+            pattern_text = "হ্যামার (Hammer) - বায়ার প্রেসার"
             pattern_type = "BULLISH"
         elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body:
-            pattern_text = "শুটিং স্টার (Shooting Star) - সেলারদের চাপ"
+            pattern_text = "শুটিং স্টার (Shooting Star) - সেলার প্রেসার"
             pattern_type = "BEARISH"
         elif prev_C < prev_O and curr_C > curr_O and curr_C >= prev_O and curr_O <= prev_C and curr_body > prev_body:
-            pattern_text = "বুলিশ এনগাল্ফিং (Bullish Engulfing) - স্ট্রং আপট্রেন্ড"
+            pattern_text = "বুলিশ এনগাল্ফিং (Strong UP)"
             pattern_type = "BULLISH"
         elif prev_C > prev_O and curr_C < curr_O and curr_C <= prev_O and curr_O >= prev_C and curr_body > prev_body:
-            pattern_text = "বেয়ারিশ এনগাল্ফিং (Bearish Engulfing) - স্ট্রং ডাউনট্রেন্ড"
+            pattern_text = "বেয়ারিশ এনগাল্ফিং (Strong DOWN)"
             pattern_type = "BEARISH"
         
-        # ================= 🚦 Signal Logic Combination =================
+        # 🚦 Signals
         signal_text = "WAITING..."
         css_class = "wait-glow"
         color_code = "#848E9C"
@@ -195,7 +186,6 @@ eth_radar = fetch_coin_radar("ETH/USDT")
 sol_radar = fetch_coin_radar("SOL/USDT")
 doge_radar = fetch_coin_radar("DOGE/USDT")
 
-# ================= 🔔 গ্লোবাল টানা সাউন্ড ও পপ-আপ অ্যালার্ম =================
 radars = {"BTC": btc_radar, "ETH": eth_radar, "SOL": sol_radar, "DOGE": doge_radar}
 play_alarm_sound = False
 
@@ -240,6 +230,7 @@ if active_data:
     dec = 4 if "DOGE" in active_name else 2
     
     with col_panel:
+        # ================= ⚡ Main Info Card =================
         st.markdown(f"""
         <div class="main-detail-card">
             <div style="font-size:14px; color:#848E9C; font-weight:bold; text-transform:uppercase;">SELECTED ASSET</div>
@@ -254,20 +245,29 @@ if active_data:
                 <b style="color:#00E676;">🎯 TARGET (TP):</b> <span style="color:#00E676; float:right; font-weight:bold; font-size:18px;">${active_data['res']:,.{dec}f}</span><br>
                 <b style="color:#FF1744;">🛑 STOP LOSS:</b> <span style="color:#FF1744; float:right; font-weight:bold; font-size:18px;">${active_data['sup']:,.{dec}f}</span>
             </div>
-            
-            <!-- 💰 Risk Manager UI -->
-            <div class="risk-box">
-                <div style="font-size:14px; color:#00BFFF; font-weight:bold; margin-bottom:10px;">💰 মানি ম্যানেজমেন্ট (Risk Sizer)</div>
+        </div>
         """, unsafe_allow_html=True)
         
-        # Streamlit Input Widgets inside the visual card
-        user_cap = st.number_input("আপনার মোট ফান্ড (USD)", min_value=10.0, value=st.session_state.user_capital, step=10.0)
-        st.session_state.user_capital = user_cap
+        # ================= 💰 Risk Manager Native UI =================
+        st.markdown("""
+            <div style="margin-top: 15px; padding: 10px; background-color: #1E2329; border-left: 4px solid #00BFFF; border-radius: 8px;">
+                <h4 style="margin:0; color:#00BFFF;">💰 মানি ম্যানেজমেন্ট</h4>
+            </div>
+        """, unsafe_allow_html=True)
         
-        user_risk = st.slider("ট্রেড প্রতি রিস্ক (%)", min_value=1.0, max_value=5.0, value=st.session_state.user_risk, step=0.5)
-        st.session_state.user_risk = user_risk
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        # ================= 🧮 Risk Math Logic =================
+        # Streamlit Native Inputs with Session Keys
+        r_col1, r_col2 = st.columns(2)
+        with r_col1:
+            st.number_input("মোট ফান্ড ($)", min_value=1.0, step=5.0, key="user_capital")
+        with r_col2:
+            st.slider("রিস্ক (%)", min_value=0.5, max_value=10.0, step=0.5, key="user_risk")
+            
+        user_cap = st.session_state.user_capital
+        user_risk = st.session_state.user_risk
+        
+        # Risk Math Logic
         entry_price = active_data['price']
         sl_price = active_data['sup'] if "BUY" in active_data['signal'] else active_data['res']
         
@@ -279,23 +279,21 @@ if active_data:
             if sl_distance_pct > 0:
                 position_size_usd = risk_amount_usd / sl_distance_pct
         
-        # Display the result
+        # Display Math Result
         if active_data['is_signal_active']:
             st.markdown(f"""
-                <div style="background-color:rgba(0,0,0,0.5); padding:10px; border-radius:8px; margin-top:10px;">
-                    <span style="color:#848E9C; font-size:13px;">সেফ ট্রেডের জন্য এই সিগন্যালে আপনার লাগানো উচিত:</span><br>
-                    <span style="color:#FCD535; font-size:24px; font-weight:bold;">${position_size_usd:,.2f}</span><br>
-                    <span style="color:#FF1744; font-size:12px;">(SL হিট করলে আপনার মাত্র ${risk_amount_usd:,.2f} লস হবে)</span>
+                <div style="background-color:rgba(0,0,0,0.5); padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #2B3139;">
+                    <div style="color:#848E9C; font-size:13px;">সেফ ট্রেডের জন্য এই সিগন্যালে আপনার লাগানো উচিত:</div>
+                    <div style="color:#FCD535; font-size:28px; font-weight:bold; margin: 5px 0;">${position_size_usd:,.2f}</div>
+                    <div style="color:#FF1744; font-size:12px;">(স্টপ লস হিট করলে আপনার মাত্র ${risk_amount_usd:,.2f} লস হবে)</div>
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-                <div style="background-color:rgba(0,0,0,0.5); padding:10px; border-radius:8px; margin-top:10px;">
-                    <span style="color:#848E9C; font-size:13px;">সিগন্যাল এলে এখানে অটোমেটিক সাইজ ক্যালকুলেট হবে।</span>
+                <div style="background-color:rgba(0,0,0,0.5); padding:15px; border-radius:8px; margin-top:10px; border: 1px solid #2B3139;">
+                    <div style="color:#848E9C; font-size:13px; text-align:center;">সিগন্যাল এলে এখানে অটোমেটিক সাইজ ক্যালকুলেট হবে।</div>
                 </div>
             """, unsafe_allow_html=True)
-            
-        st.markdown("</div></div>", unsafe_allow_html=True)
         
     with col_chart:
         fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'], name='Price')])
@@ -307,7 +305,7 @@ if active_data:
         
         fig.update_layout(
             template="plotly_dark", 
-            height=450, 
+            height=500, 
             margin=dict(l=10, r=10, t=10, b=10), 
             xaxis_rangeslider_visible=True, 
             xaxis_rangeslider_thickness=0.1, 
