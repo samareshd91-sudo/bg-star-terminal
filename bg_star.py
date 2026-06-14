@@ -5,9 +5,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time 
 
-st.set_page_config(page_title="BG STAR V6 PRO (Fast Scalper)", layout="wide")
+st.set_page_config(page_title="BG STAR V6 PRO (Pure Scalper)", layout="wide")
 
-# হিজিবিজি মুক্ত একদম পরিষ্কার ও রেসপন্সিভ ডিজাইন
 st.markdown("""
     <style>
     html, body, #root, .stApp, [data-testid="stAppViewContainer"], .main {
@@ -25,29 +24,33 @@ st.markdown("""
 coin = "BTC/USDT"
 
 st.sidebar.title("⚙️ BG STAR Control")
-st.sidebar.write("🤖 Fast Scalping Mode Active!")
-selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h"], index=1) # স্ক্যাল্পিংয়ের জন্য 4h/1d বাদ দেওয়া হলো
-auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 10s)", value=True)
+st.sidebar.write("🛡️ Pure Scalping (50 EMA Shield)")
+selected_tf = st.sidebar.selectbox("Timeframe", ["5m", "15m", "1h"], index=1) 
+auto_refresh = st.sidebar.checkbox("🟢 Auto-Refresh (Live 15s)", value=True)
 
-st.title(f"🎯 BG STAR V6 PRO (Fast Scalper Engine)")
+st.title(f"🎯 BG STAR V6 PRO (Pure Scalper Engine)")
 
-# ক্র্যাশ প্রোটেকশন চালু করা হলো
 exchange = ccxt.kucoin({'enableRateLimit': True})
 play_sound = False
 
-# সিগন্যাল বক্সটি স্ক্রিনের মাঝে রাখার জন্য লেআউট
 col1, col2, col3 = st.columns([1, 2, 1])
 
 try:
-    # ডাটা ফেচ করা (শুধুমাত্র প্রয়োজনীয় ক্যান্ডেল)
-    bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=150)
+    # 50 EMA সঠিকভাবে ক্যালকুলেট করার জন্য ডাটা লিমিট ২০০ করা হলো
+    bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     
-    # ফাস্ট স্ক্যাল্পিং ইন্ডিকেটর (9 EMA এবং 21 EMA)
+    # ৩টি প্রধান EMA (আপনার বন্ধুর লজিক)
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+    
+    curr_price = df['close'].iloc[-1]
+    curr_ema_50 = df['ema_50'].iloc[-1]
+    
+    # 50 EMA এর সাহায্যে কারেন্ট ট্রেন্ড (Safety Shield)
+    trend_50 = "BULLISH" if curr_price > curr_ema_50 else "BEARISH"
     ema_bullish = df['ema_9'].iloc[-1] > df['ema_21'].iloc[-1]
-    scalp_trend = "BULLISH (9>21)" if ema_bullish else "BEARISH (9<21)"
     
     # ইন্ডিকেটর - RSI (14)
     delta = df['close'].diff()
@@ -64,64 +67,69 @@ try:
     
     df['vol_sma'] = df['volume'].rolling(20).mean() 
     
-    # ফাস্ট লোকাল লিকুইডিটি জোন (গত ২০ ক্যান্ডেল)
-    support = df['low'].tail(20).min()
-    resistance = df['high'].tail(20).max()
+    # কাছাকাছি সাপোর্ট ও রেজিস্ট্যান্স (গত ১৫ ক্যান্ডেলের ডেটা)
+    local_support = df['low'].tail(15).min()
+    local_resistance = df['high'].tail(15).max()
     
-    curr_price = df['close'].iloc[-1]
     curr_vol = df['volume'].iloc[-1]
     curr_rsi = df['rsi'].iloc[-1]
     vol_sma = df['vol_sma'].iloc[-1]
     curr_macd = df['macd'].iloc[-1]
     curr_macd_sig = df['macd_signal'].iloc[-1]
-    risk_reward_gap = resistance - support
     
     macd_bullish = curr_macd > curr_macd_sig
+    is_volume_high = curr_vol > vol_sma  
     
-    signal_text = "⚪ WAIT FOR CROSSOVER"
+    signal_text = "⚪ WAITING FOR SETUP"
     box_class = "wait-box"
     price_color = "#f39c12"
     
-    is_volume_high = curr_vol > vol_sma  
-    
-    # ⚡ ফাস্ট স্ক্যাল্পিং লজিক (EMA 9/21 Cross + MACD)
-    if ema_bullish and macd_bullish and curr_rsi < 65:
-        signal_text = "🟢 FAST SCALP BUY"
-        box_class = "buy-box"
-        price_color = "#00E676"
-        play_sound = True
+    # 🛡️ পিওর স্ক্যাল্পিং লজিক (50 EMA Shield + 9/21 Cross)
+    if trend_50 == "BULLISH" and ema_bullish and macd_bullish and curr_rsi < 65:
+        if is_volume_high:
+            signal_text = "🟢 FAST SCALP BUY"
+            box_class = "buy-box"
+            price_color = "#00E676"
+            play_sound = True
+        else:
+            signal_text = "⚪ LOW VOLUME - WAIT"
         
-    elif not ema_bullish and not macd_bullish and curr_rsi > 35:
-        signal_text = "🔴 FAST SCALP SELL"
-        box_class = "sell-box"
-        price_color = "#FF1744"
-        play_sound = True
+    elif trend_50 == "BEARISH" and not ema_bullish and not macd_bullish and curr_rsi > 35:
+        if is_volume_high:
+            signal_text = "🔴 FAST SCALP SELL"
+            box_class = "sell-box"
+            price_color = "#FF1744"
+            play_sound = True
+        else:
+            signal_text = "⚪ LOW VOLUME - WAIT"
         
     with col2:
         st.markdown(f'<div class="signal-box {box_class}"><b>{coin}</b><br><span style="font-size:32px; font-weight:bold; color:{price_color};">${curr_price:.2f}</span><br><span style="font-size:18px; font-weight:bold;">{signal_text}</span></div>', unsafe_allow_html=True)
 
     if play_sound:
-        st.toast("🔔 SCALP SIGNAL DETECTED!", icon="🔔")
+        st.toast("⚡ FAST SCALP SIGNAL DETECTED!", icon="🔔")
 
     st.markdown("---")
 
-    # ৪টি প্রধান মেট্রিকস (নতুন স্ক্যাল্পিং ডিজাইনে)
+    # ৪টি প্রধান মেট্রিকস (এখন 50 EMA শিল্ড দেখাবে)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Live Price", f"${curr_price:.2f}")
-    m2.metric("Scalp Trend (9/21)", "UPTREND 🟢" if ema_bullish else "DOWNTREND 🔴")
-    m3.metric("Local Support (20 C)", f"${support:.2f}")
-    m4.metric("Local Resistance (20 C)", f"${resistance:.2f}")
+    m2.metric("50 EMA Shield", "UPTREND 🟢" if trend_50 == "BULLISH" else "DOWNTREND 🔴")
+    m3.metric("Local Support", f"${local_support:.2f}")
+    m4.metric("Local Resistance", f"${local_resistance:.2f}")
 
-    # 📊 ক্যান্ডেলস্টিক চার্ট (EMA 9 এবং 21 সহ)
+    # 📊 ক্যান্ডেলস্টিক চার্ট
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8, 0.2], vertical_spacing=0.03)
     fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
     
-    # নতুন ফাস্ট EMA লাইন
+    # চার্টে ৩টি লাইন যোগ করা হলো
     fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9 (Fast)', line=dict(color='#00BFFF', width=2)), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21 (Slow)', line=dict(color='#FF8C00', width=2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name='EMA 50 (Shield)', line=dict(color='#F1C40F', width=3, dash='dot')), row=1, col=1)
     
-    fig.add_hline(y=support, line_dash="dash", line_color="#00ff00", row=1, col=1)
-    fig.add_hline(y=resistance, line_dash="dash", line_color="#ff0000", row=1, col=1)
+    fig.add_hline(y=local_support, line_dash="dash", line_color="#00ff00", row=1, col=1)
+    fig.add_hline(y=local_resistance, line_dash="dash", line_color="#ff0000", row=1, col=1)
+    
     colors = ['#00ff00' if close >= open else '#ff0000' for open, close in zip(df['open'], df['close'])]
     fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors), row=2, col=1)
     fig.update_layout(template="plotly_dark", height=450, margin=dict(l=0, r=0, t=10, b=0), xaxis_rangeslider_visible=False)
@@ -130,35 +138,40 @@ try:
     st.markdown("---")
 
     # 📥 বিস্তারিত এনালাইসিস প্যানেল
-    with st.expander("🔍 এখানে টিপুন: বিস্তারিত AI স্ক্যাল্পিং রিপোর্ট"):
-        st.markdown("### 🧠 BG STAR Fast Scalper Engine")
+    with st.expander("🔍 এখানে টিপুন: বিস্তারিত AI স্ক্যাল্পিং রিপোর্ট (50 EMA Active)"):
+        st.markdown("### 🧠 BG STAR Pure Scalper Engine")
         smc_analysis = []
         
-        # ১. EMA Crossover
-        cross_status = "9 EMA ওপরে আছে (Bullish)" if ema_bullish else "9 EMA নিচে আছে (Bearish)"
-        smc_analysis.append(f"**১. স্ক্যাল্প ট্রেন্ড:** {cross_status}।")
+        # ১. 50 EMA Shield
+        smc_analysis.append(f"**১. সেফটি শিল্ড (50 EMA):** {trend_50}।")
         
-        # ২. MACD
-        macd_status = "BULLISH 🟢" if macd_bullish else "BEARISH 🔴"
-        smc_analysis.append(f"**২. MACD ট্রেন্ড:** {macd_status}।")
+        # ২. 9/21 Crossover
+        cross_status = "BULLISH (9 EMA ওপরে)" if ema_bullish else "BEARISH (9 EMA নিচে)"
+        smc_analysis.append(f"**২. অ্যাকশন লাইন:** {cross_status}।")
 
         # ৩. RSI
         rsi_status = "OVERSOLD 🟢" if curr_rsi < 45 else "OVERBOUGHT 🔴" if curr_rsi > 60 else "NEUTRAL ⚪"
         smc_analysis.append(f"**৩. RSI পজিশন:** {curr_rsi:.1f} ({rsi_status})।")
+        
+        # ৪. ভলিউম শিল্ড
+        vol_status = "🟢 হাই ভলিউম (ট্রেড করা যাবে)" if is_volume_high else "🔴 লো ভলিউম (অপেক্ষা করুন)"
+        smc_analysis.append(f"**৪. ভলিউম:** {vol_status}।")
 
         st.info(f"**📊 লাইভ মার্কেট ডাটা রিপোর্ট:** {' '.join(smc_analysis)}")
 
-        # ফাস্ট স্ক্যাল্পিং টার্গেট (ছোট স্টপ লস 1%)
-        if ema_bullish and macd_bullish and curr_rsi < 65:
-            st.success(f"**🟢 FAST SCALP BUY:** \n* **Entry:** ${curr_price:.2f} | 🎯 **Quick TP:** ${curr_price + (risk_reward_gap * 0.3):.2f} | 🛑 **Tight SL (1%):** ${curr_price - (curr_price * 0.01):.2f}")
-        elif not ema_bullish and not macd_bullish and curr_rsi > 35:
-            st.error(f"**🔴 FAST SCALP SELL:** \n* **Entry:** ${curr_price:.2f} | 🎯 **Quick TP:** ${curr_price - (risk_reward_gap * 0.3):.2f} | 🛑 **Tight SL (1%):** ${curr_price + (curr_price * 0.01):.2f}")
+        # ডায়নামিক টেক প্রফিট এবং স্টপ লস লজিক
+        if "BUY" in signal_text:
+            st.success(f"**🟢 FAST SCALP BUY DETECTED:** \n* **১. Entry:** ${curr_price:.2f} \n* 🎯 **২. TP (Nearest Resistance):** ${local_resistance:.2f} \n* 🛡️ **৩. SL (Nearest Support):** ${(local_support - (local_support*0.002)):.2f}")
+        elif "SELL" in signal_text:
+            st.error(f"**🔴 FAST SCALP SELL DETECTED:** \n* **১. Entry:** ${curr_price:.2f} \n* 🎯 **২. TP (Nearest Support):** ${local_support:.2f} \n* 🛡️ **৩. SL (Nearest Resistance):** ${(local_resistance + (local_resistance*0.002)):.2f}")
+        elif "LOW VOLUME" in signal_text:
+            st.warning("⚠️ প্রাইস এবং ইন্ডিকেটর পারফেক্ট জায়গায় আছে, কিন্তু মার্কেটে ভলিউম কম। ফেক ব্রেকআউট এড়াতে ভলিউম বাড়া পর্যন্ত অপেক্ষা করুন।")
         else:
-            st.write("⚪ নো-ট্রেড জোন। 9 ও 21 EMA ক্রসওভারের জন্য অপেক্ষা করুন।")
+            st.write("⚪ নো-ট্রেড জোন। 50 EMA-এর সাথে 9 এবং 21 লাইনের ক্রসওভার মেলার জন্য অপেক্ষা করুন।")
 
 except Exception as e:
-    st.error("⚠️ সার্ভার কানেকশনে সমস্যা হচ্ছে। ডাটা লোড হওয়ার জন্য অপেক্ষা করুন...")
+    st.error("⚠️ সার্ভার থেকে লাইভ ডাটা লোড হচ্ছে, দয়া করে অপেক্ষা করুন...")
 
 if auto_refresh:
-    time.sleep(10)
+    time.sleep(15)
     st.rerun()
