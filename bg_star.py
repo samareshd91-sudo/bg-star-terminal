@@ -203,29 +203,30 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
-        # 📱 SMART SCROLLBAR SETTINGS 📱
+        # 📱 X এবং Y Axis Fully Unlocked 📱
         fig.update_layout(
             template="plotly_dark", 
             height=400, 
             margin=dict(l=10, r=10, t=10, b=10), 
-            xaxis_rangeslider_visible=True, # 🟢 ম্যাজিক স্ক্রলবার অন করা হলো
-            xaxis_rangeslider_thickness=0.1, # স্ক্রলবারটা স্লিম রাখা হলো
-            yaxis=dict(side='right', fixedrange=False), # 🟢 দামের স্কেল ডানদিকে নিয়ে যাওয়া হলো
+            xaxis_rangeslider_visible=True, # স্ক্রলবার অন
+            xaxis_rangeslider_thickness=0.1, 
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(0,0,0,0)', 
             font=dict(color='#848E9C'),
-            dragmode='pan', 
+            dragmode='pan', # ডিফল্ট টাচ প্যান
             hovermode=False 
         )
         
+        # 🟢 ম্যাজিক এখানেই! X এবং Y দুটো অক্ষকেই পুরোপুরি আনলক করা হলো
         fig.update_xaxes(fixedrange=False)
+        fig.update_yaxes(side='right', fixedrange=False) 
         
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={
-                'displayModeBar': False, # ওপরের ফালতু বাটনগুলো গায়েব
-                'scrollZoom': False, # আঙুল দিয়ে জুম বন্ধ (স্ক্রলবার ব্যবহার করতে হবে)
+                'displayModeBar': False, 
+                'scrollZoom': True, # আঙুল দিয়ে পিন্চ-জুমও অন থাকলো
                 'doubleClick': 'reset'
             }
         )
@@ -250,7 +251,7 @@ if active_data:
         elif "SELL" in active_data['signal']:
             st.error(f"**🔴 বটের নির্দেশ:** এখন মার্কেটে বিক্রির (SELL) জন্য সব লজিক মিলে গেছে। টার্গেট: ${active_data['sup']:,.{dec}f}, স্টপ লস: ${active_data['res']:,.{dec}f}")
         elif "LOW VOL" in active_data['signal']:
-            st.warning("⚠️ **বটের নির্দেশ:** প্রাইস এবং ইন্ডিকেটর পারফেক্ট জায়গায় আছে, কিন্তু মার্কেটে এখন বড় ট্রেডাররা নেই (Volume কম)। তাই ফেক ব্রেকআউট এড়াতে চুপচাপ বসে থাকুন।")
+            st.warning("⚠️ **বটের নির্দেশ:** প্রাইস এবং ইন্ডিকেটর পারফেক্ট জায়গায় আছে, কিন্তু মার্কেটে এখন বড় ট্রেডাররা নেই (Volume কম)। তাই ফেক ব্রেকআউট এড়াতে চুপচাপ বসে থাকুন।")
         else:
             st.write("⚪ **বটের নির্দেশ:** নো-ট্রেড জোন। এখনো সব ইন্ডিকেটর একসাথে সিগন্যাল দেয়নি। সঠিক সুযোগের জন্য অপেক্ষা করুন।")
 
