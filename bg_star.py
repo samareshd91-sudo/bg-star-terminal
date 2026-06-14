@@ -13,7 +13,8 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #0B0E11 !important;
         color: #EAECEF !important;
-        overscroll-behavior: none !important; /* স্ক্রল করার সময় পেজ বাউন্স করা বন্ধ করবে */
+        overscroll-behavior: none !important; 
+        touch-action: pan-x !important; /* মোবাইলে শুধু ডানে-বামে স্ক্রল অ্যালাউ করবে */
     }
     .brand-title {
         font-size: 36px;
@@ -71,10 +72,10 @@ if 'active_coin' not in st.session_state:
 st.markdown('<div class="brand-title">BG STAR PRO TERMINAL</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | GLOBAL SIGNAL ALERTS ACTIVE</div>', unsafe_allow_html=True)
 
-# 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন (চার্ট দেখার সময় এটা অফ করে নেবেন)
+# 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট জুম করার সময় এটি বন্ধ রাখুন)", value=True)
+    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট দেখার সময় এটি বন্ধ রাখুন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -203,29 +204,31 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
-        # 📱 Mobile Friendly Chart Settings
+        # 📱 Ultimate Mobile Friendly Fixes 📱
         fig.update_layout(
             template="plotly_dark", 
-            height=420, 
-            margin=dict(l=0, r=0, t=0, b=0), 
+            height=350, # মোবাইলের জন্য হাইট একটু কমানো হলো যাতে পুরোটা স্ক্রিনে ধরে
+            margin=dict(l=10, r=10, t=10, b=10), 
             xaxis_rangeslider_visible=False,
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(0,0,0,0)', 
             font=dict(color='#848E9C'),
-            dragmode='pan', # আঙুল দিয়ে সরালে চার্ট সরবে, জুম বক্স হবে না
-            hovermode='x unified'
+            dragmode='pan', # ডিফল্ট প্যান মোড
+            hovermode=False # 🛑 বিরক্তিকর পপ-আপ বক্স পুরোপুরি অফ করা হলো
         )
-        # X এবং Y অক্ষকে ফ্রি করা হলো
-        fig.update_xaxes(fixedrange=False)
-        fig.update_yaxes(fixedrange=False)
         
-        # Streamlit এ Mobile Config পাঠানো হলো
+        # 🛑 Y-Axis Lock: ওপর-নিচে টানাটানি করা বন্ধ করা হলো 
+        fig.update_yaxes(fixedrange=True)
+        
+        # ✅ X-Axis Free: শুধু ডানে-বামে সরবে 
+        fig.update_xaxes(fixedrange=False)
+        
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={
-                'scrollZoom': True, # Pinch-to-zoom চালু
-                'displayModeBar': False, # মোবাইলে ওপরের বিরক্তিকর মেনুবার লুকানো
+                'displayModeBar': False, # চার্টের ওপরের টুলবার লুকানো হলো
+                'scrollZoom': False, # ভুল করে জুম হওয়া বন্ধ করা হলো
                 'doubleClick': 'reset'
             }
         )
