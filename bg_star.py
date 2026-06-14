@@ -203,20 +203,19 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
-        # 📱 Ultimate Mobile Pinch-to-Zoom Fixes 📱
+        # 📱 Tap-to-Zoom Button Fixes 📱
         fig.update_layout(
             template="plotly_dark", 
             height=380, 
-            margin=dict(l=10, r=10, t=10, b=10), 
+            margin=dict(l=10, r=10, t=30, b=10), # ওপরে বাটনগুলোর জন্য একটু জায়গা রাখা হলো
             xaxis_rangeslider_visible=False,
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(0,0,0,0)', 
             font=dict(color='#848E9C'),
-            dragmode='pan', # এক আঙুল দিয়ে ডানে-বামে সরানোর জন্য
-            hovermode=False # কালো পপ-আপ বক্স বন্ধ করা হলো
+            dragmode='pan', 
+            hovermode=False 
         )
         
-        # ✅ দুটো অক্ষই আনলক করা হলো, যাতে দুই আঙুল দিয়ে ইচ্ছেমতো জুম করা যায়
         fig.update_xaxes(fixedrange=False)
         fig.update_yaxes(fixedrange=False)
         
@@ -224,9 +223,12 @@ if active_data:
             fig, 
             use_container_width=True, 
             config={
-                'displayModeBar': False, # মেনুবার লুকানো
-                'scrollZoom': True, # 🟢 দুই আঙুল দিয়ে জুম করার আসল সুইচ!
-                'doubleClick': 'reset' # চার্টের ওপর ডাবল ট্যাপ করলে আবার আগের অবস্থায় ফিরে আসবে
+                'displayModeBar': True, # 🟢 চার্টের ওপর মেনুবার (বাটনগুলো) অন করা হলো!
+                'displaylogo': False,
+                'modeBarButtonsToRemove': ['zoom2d', 'select2d', 'lasso2d', 'autoScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines'], 
+                # শুধু + (Zoom In), - (Zoom Out) এবং Home (Reset) বাটনগুলো রাখা হয়েছে
+                'scrollZoom': True, 
+                'doubleClick': 'reset' # চার্টে ডাবল-ট্যাপ করলেও আগের জায়গায় রিসেট হয়ে যাবে
             }
         )
 
