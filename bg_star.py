@@ -56,9 +56,18 @@ st.markdown("""
         background-color: #2B3139 !important;
         transform: translateY(-2px);
     }
-    hr { border-color: #2B3139; }
+    hr { border-color: #2B3139; margin: 15px 0; }
     
     .streamlit-expanderContent { color: #EAECEF !important; }
+    
+    /* Risk Calculator Box */
+    .risk-box {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-left: 4px solid #00BFFF;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -67,9 +76,13 @@ selected_tf = "15m"
 
 if 'active_coin' not in st.session_state:
     st.session_state.active_coin = "BTC/USDT"
+if 'user_capital' not in st.session_state:
+    st.session_state.user_capital = 100.0
+if 'user_risk' not in st.session_state:
+    st.session_state.user_risk = 2.0
 
 st.markdown('<div class="brand-title">BG STAR PRO TERMINAL</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | AI CANDLESTICK SCANNER ACTIVE</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | AI CANDLE & RISK MANAGER ACTIVE</div>', unsafe_allow_html=True)
 
 # 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
@@ -147,7 +160,7 @@ def fetch_coin_radar(coin):
         if trend_50 == "BULLISH" and ema_bullish and macd_bullish and rsi < 65:
             if is_volume_high:
                 if pattern_type == "BULLISH":
-                    signal_text = "🚀 SUPER BUY"  # ইন্ডিকেটর + ক্যান্ডেল একসাথে মিলে গেলে
+                    signal_text = "🚀 SUPER BUY" 
                 else:
                     signal_text = "🟢 BUY SETUP"
                 css_class = "buy-glow"
@@ -159,7 +172,7 @@ def fetch_coin_radar(coin):
         elif trend_50 == "BEARISH" and not ema_bullish and not macd_bullish and rsi > 35:
             if is_volume_high:
                 if pattern_type == "BEARISH":
-                    signal_text = "🧨 SUPER SELL" # ইন্ডিকেটর + ক্যান্ডেল একসাথে মিলে গেলে
+                    signal_text = "🧨 SUPER SELL" 
                 else:
                     signal_text = "🔴 SELL SETUP"
                 css_class = "sell-glow"
@@ -237,13 +250,52 @@ if active_data:
             <div style="text-align:left; font-size:15px; line-height:2.2; color:#848E9C;">
                 <b>🕯️ ক্যান্ডেল স্ক্যান:</b> <span style="color:#FCD535; float:right; font-weight:bold;">{active_data['pattern']}</span><br>
                 <b>🛡️ 50 EMA Trend:</b> <span style="color:#EAECEF; float:right;">{active_data['trend']}</span><br>
-                <b>🔮 RSI (14):</b> <span style="color:#EAECEF; float:right;">{active_data['rsi']:.1f}</span><br>
                 <hr style="margin:10px 0;">
                 <b style="color:#00E676;">🎯 TARGET (TP):</b> <span style="color:#00E676; float:right; font-weight:bold; font-size:18px;">${active_data['res']:,.{dec}f}</span><br>
                 <b style="color:#FF1744;">🛑 STOP LOSS:</b> <span style="color:#FF1744; float:right; font-weight:bold; font-size:18px;">${active_data['sup']:,.{dec}f}</span>
             </div>
-        </div>
+            
+            <!-- 💰 Risk Manager UI -->
+            <div class="risk-box">
+                <div style="font-size:14px; color:#00BFFF; font-weight:bold; margin-bottom:10px;">💰 মানি ম্যানেজমেন্ট (Risk Sizer)</div>
         """, unsafe_allow_html=True)
+        
+        # Streamlit Input Widgets inside the visual card
+        user_cap = st.number_input("আপনার মোট ফান্ড (USD)", min_value=10.0, value=st.session_state.user_capital, step=10.0)
+        st.session_state.user_capital = user_cap
+        
+        user_risk = st.slider("ট্রেড প্রতি রিস্ক (%)", min_value=1.0, max_value=5.0, value=st.session_state.user_risk, step=0.5)
+        st.session_state.user_risk = user_risk
+        
+        # ================= 🧮 Risk Math Logic =================
+        entry_price = active_data['price']
+        sl_price = active_data['sup'] if "BUY" in active_data['signal'] else active_data['res']
+        
+        risk_amount_usd = user_cap * (user_risk / 100.0)
+        position_size_usd = 0
+        
+        if active_data['is_signal_active'] and entry_price != sl_price:
+            sl_distance_pct = abs(entry_price - sl_price) / entry_price
+            if sl_distance_pct > 0:
+                position_size_usd = risk_amount_usd / sl_distance_pct
+        
+        # Display the result
+        if active_data['is_signal_active']:
+            st.markdown(f"""
+                <div style="background-color:rgba(0,0,0,0.5); padding:10px; border-radius:8px; margin-top:10px;">
+                    <span style="color:#848E9C; font-size:13px;">সেফ ট্রেডের জন্য এই সিগন্যালে আপনার লাগানো উচিত:</span><br>
+                    <span style="color:#FCD535; font-size:24px; font-weight:bold;">${position_size_usd:,.2f}</span><br>
+                    <span style="color:#FF1744; font-size:12px;">(SL হিট করলে আপনার মাত্র ${risk_amount_usd:,.2f} লস হবে)</span>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div style="background-color:rgba(0,0,0,0.5); padding:10px; border-radius:8px; margin-top:10px;">
+                    <span style="color:#848E9C; font-size:13px;">সিগন্যাল এলে এখানে অটোমেটিক সাইজ ক্যালকুলেট হবে।</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("</div></div>", unsafe_allow_html=True)
         
     with col_chart:
         fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'], name='Price')])
@@ -255,7 +307,7 @@ if active_data:
         
         fig.update_layout(
             template="plotly_dark", 
-            height=400, 
+            height=450, 
             margin=dict(l=10, r=10, t=10, b=10), 
             xaxis_rangeslider_visible=True, 
             xaxis_rangeslider_thickness=0.1, 
@@ -291,14 +343,10 @@ if active_data:
         
         st.info(f"**📊 লাইভ ডাটা:** {' '.join(smc_analysis)}")
 
-        if "SUPER BUY" in active_data['signal']:
-            st.success(f"**🚀 ডাবল কনফার্মেশন (SUPER BUY):** ইন্ডিকেটর এবং ক্যান্ডেলস্টিক প্যাটার্ন দুটোই স্ট্রং BUY সিগন্যাল দিচ্ছে! এটা একটা পারফেক্ট জোন। টার্গেট: ${active_data['res']:,.{dec}f}, স্টপ লস: ${active_data['sup']:,.{dec}f}")
-        elif "BUY" in active_data['signal']:
-            st.success(f"**🟢 বটের নির্দেশ:** ইন্ডিকেটরগুলো কেনার (BUY) জন্য তৈরি। এন্ট্রি নিতে পারেন। টার্গেট: ${active_data['res']:,.{dec}f}")
-        elif "SUPER SELL" in active_data['signal']:
-            st.error(f"**🧨 ডাবল কনফার্মেশন (SUPER SELL):** ইন্ডিকেটর এবং ক্যান্ডেলস্টিক দুটোই স্ট্রং SELL সিগন্যাল দিচ্ছে! দ্রুত এন্ট্রি নিন। টার্গেট: ${active_data['sup']:,.{dec}f}, স্টপ লস: ${active_data['res']:,.{dec}f}")
-        elif "SELL" in active_data['signal']:
-            st.error(f"**🔴 বটের নির্দেশ:** ইন্ডিকেটরগুলো বিক্রির (SELL) জন্য তৈরি। টার্গেট: ${active_data['sup']:,.{dec}f}")
+        if "SUPER BUY" in active_data['signal'] or "BUY" in active_data['signal']:
+            st.success(f"**🟢 বটের নির্দেশ:** কেনার (BUY) জন্য সব লজিক মিলে গেছে। টার্গেট: ${active_data['res']:,.{dec}f}, স্টপ লস: ${active_data['sup']:,.{dec}f}। **(আপনার ফান্ড অনুযায়ী এই ট্রেডে ${position_size_usd:,.2f} এর বেশি এন্ট্রি নেবেন না)**")
+        elif "SUPER SELL" in active_data['signal'] or "SELL" in active_data['signal']:
+            st.error(f"**🔴 বটের নির্দেশ:** বিক্রির (SELL) জন্য সব লজিক মিলে গেছে। টার্গেট: ${active_data['sup']:,.{dec}f}, স্টপ লস: ${active_data['res']:,.{dec}f}। **(আপনার ফান্ড অনুযায়ী এই ট্রেডে ${position_size_usd:,.2f} এর বেশি এন্ট্রি নেবেন না)**")
         elif "LOW VOL" in active_data['signal']:
             st.warning("⚠️ **বটের নির্দেশ:** প্রাইস ঠিক জায়গায় আছে, কিন্তু বড় ট্রেডারদের টাকা এখনো ঢোকেনি (Volume কম)। তাই ফেক ব্রেকআউট এড়াতে চুপচাপ বসে থাকুন।")
         else:
