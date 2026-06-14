@@ -74,7 +74,7 @@ st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | GLOBAL SIGNAL 
 # 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট জুম করার সময় এটি অফ রাখুন)", value=True)
+    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট দেখার সময় এটি অফ রাখুন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -203,12 +203,14 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
-        # 📱 Tap-to-Zoom Button Fixes 📱
+        # 📱 SMART SCROLLBAR SETTINGS 📱
         fig.update_layout(
             template="plotly_dark", 
-            height=380, 
-            margin=dict(l=10, r=10, t=30, b=10), # ওপরে বাটনগুলোর জন্য একটু জায়গা রাখা হলো
-            xaxis_rangeslider_visible=False,
+            height=400, 
+            margin=dict(l=10, r=10, t=10, b=10), 
+            xaxis_rangeslider_visible=True, # 🟢 ম্যাজিক স্ক্রলবার অন করা হলো
+            xaxis_rangeslider_thickness=0.1, # স্ক্রলবারটা স্লিম রাখা হলো
+            yaxis=dict(side='right', fixedrange=False), # 🟢 দামের স্কেল ডানদিকে নিয়ে যাওয়া হলো
             paper_bgcolor='rgba(0,0,0,0)', 
             plot_bgcolor='rgba(0,0,0,0)', 
             font=dict(color='#848E9C'),
@@ -217,18 +219,14 @@ if active_data:
         )
         
         fig.update_xaxes(fixedrange=False)
-        fig.update_yaxes(fixedrange=False)
         
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={
-                'displayModeBar': True, # 🟢 চার্টের ওপর মেনুবার (বাটনগুলো) অন করা হলো!
-                'displaylogo': False,
-                'modeBarButtonsToRemove': ['zoom2d', 'select2d', 'lasso2d', 'autoScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines'], 
-                # শুধু + (Zoom In), - (Zoom Out) এবং Home (Reset) বাটনগুলো রাখা হয়েছে
-                'scrollZoom': True, 
-                'doubleClick': 'reset' # চার্টে ডাবল-ট্যাপ করলেও আগের জায়গায় রিসেট হয়ে যাবে
+                'displayModeBar': False, # ওপরের ফালতু বাটনগুলো গায়েব
+                'scrollZoom': False, # আঙুল দিয়ে জুম বন্ধ (স্ক্রলবার ব্যবহার করতে হবে)
+                'doubleClick': 'reset'
             }
         )
 
