@@ -4,70 +4,71 @@ import pandas as pd
 import plotly.graph_objects as go
 import time 
 
-# পেজ কনফিগারেশন (Premium Wide Layout)
-st.set_page_config(page_title="BG STAR PRO SCALPER", layout="wide", initial_sidebar_state="collapsed")
+# 👑 Premium Layout Config
+st.set_page_config(page_title="BG STAR ADVANCED TERMINAL", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Premium CSS Styling (Binance & BG Star Gold Theme)
+# 🌟 Ultra-Premium CSS
 st.markdown("""
     <style>
-    /* Main Background */
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #0B0E11 !important;
         color: #EAECEF !important;
     }
-    
-    /* Header & Branding */
     .brand-title {
-        font-size: 42px;
+        font-size: 36px;
         font-weight: 900;
         background: -webkit-linear-gradient(45deg, #FCD535, #F39C12);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0px;
         text-align: center;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 3px;
+        margin-bottom: 0px;
     }
-    .sub-title { text-align: center; color: #848E9C; font-size: 16px; margin-bottom: 30px; letter-spacing: 1px; }
-    .live-badge { background: rgba(0, 255, 0, 0.15); color: #00E676; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; border: 1px solid #00E676; }
+    .sub-title { text-align: center; color: #848E9C; font-size: 14px; margin-bottom: 25px; }
     
-    /* Premium Cards */
-    .pro-card {
-        background-color: #1E2329;
+    .buy-glow { color: #00E676; font-weight: 900; text-shadow: 0px 0px 8px rgba(0,230,118,0.4); }
+    .sell-glow { color: #FF1744; font-weight: 900; text-shadow: 0px 0px 8px rgba(255,23,68,0.4); }
+    .wait-glow { color: #848E9C; font-weight: bold; }
+    
+    .main-detail-card {
+        background: linear-gradient(135deg, #1E2329 0%, #14181C 100%);
         border-radius: 16px;
-        padding: 24px;
-        border: 1px solid #2B3139;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        text-align: center;
-        transition: transform 0.3s ease;
+        padding: 25px;
+        border: 1px solid #FCD535;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    .pro-card:hover { border-color: #FCD535; transform: translateY(-5px); }
     
-    /* Signal Colors */
-    .buy-signal { color: #00E676; text-shadow: 0px 0px 10px rgba(0,230,118,0.4); }
-    .sell-signal { color: #FF1744; text-shadow: 0px 0px 10px rgba(255,23,68,0.4); }
-    .wait-signal { color: #848E9C; }
-    
-    /* Data Text */
-    .coin-name { font-size: 24px; font-weight: 800; color: #EAECEF; margin-bottom: 5px; }
-    .price-text { font-size: 36px; font-weight: bold; margin-bottom: 15px; }
-    .signal-text { font-size: 20px; font-weight: 900; letter-spacing: 1.5px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); }
-    
-    /* Metrics */
-    [data-testid="stMetricValue"] { color: #FCD535 !important; font-size: 24px !important; }
-    [data-testid="stMetricLabel"] { color: #848E9C !important; font-weight: bold !important; }
+    div.stButton > button {
+        background-color: #1E2329 !important;
+        color: #EAECEF !important;
+        border: 1px solid #2B3139 !important;
+        border-radius: 12px !important;
+        width: 100% !important;
+        padding: 10px !important;
+        transition: all 0.3s ease !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }
+    div.stButton > button:hover {
+        border-color: #FCD535 !important;
+        background-color: #2B3139 !important;
+        transform: translateY(-2px);
+    }
     hr { border-color: #2B3139; }
     </style>
 """, unsafe_allow_html=True)
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
-selected_tf = "15m"  # প্রোফেশনাল লুকের জন্য ফিক্সড টাইমফ্রেম (ডিফল্ট)
+selected_tf = "15m" 
 
-# 🌟 Header Section
+if 'active_coin' not in st.session_state:
+    st.session_state.active_coin = "BTC/USDT"
+
 st.markdown('<div class="brand-title">BG STAR PRO TERMINAL</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title"><span class="live-badge">🟢 LIVE MARKET</span> | ALGORITHMIC SCALPING ENGINE V6</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | GLOBAL SIGNAL ALERTS ACTIVE</div>', unsafe_allow_html=True)
 
-def get_scalp_signal(coin):
+def fetch_coin_radar(coin):
     try:
         bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -99,96 +100,123 @@ def get_scalp_signal(coin):
         local_support = df['low'].tail(15).min()
         local_resistance = df['high'].tail(15).max()
         
-        signal_text = "WAITING FOR SETUP"
-        css_class = "wait-signal"
+        signal_text = "WAITING..."
+        css_class = "wait-glow"
         color_code = "#848E9C"
+        is_signal_active = False
         
         if trend_50 == "BULLISH" and ema_bullish and macd_bullish and rsi < 65:
             if is_volume_high:
-                signal_text = "🟢 STRONG BUY"
-                css_class = "buy-signal"
+                signal_text = "🟢 BUY SETUP"
+                css_class = "buy-glow"
                 color_code = "#00E676"
+                is_signal_active = True
             else:
-                signal_text = "LOW VOL - WAIT"
+                signal_text = "LOW VOL"
         elif trend_50 == "BEARISH" and not ema_bullish and not macd_bullish and rsi > 35:
             if is_volume_high:
-                signal_text = "🔴 STRONG SELL"
-                css_class = "sell-signal"
+                signal_text = "🔴 SELL SETUP"
+                css_class = "sell-glow"
                 color_code = "#FF1744"
+                is_signal_active = True
             else:
-                signal_text = "LOW VOL - WAIT"
+                signal_text = "LOW VOL"
                 
         return {
             'price': curr_price, 'signal': signal_text, 'css': css_class, 'color': color_code,
-            'df': df, 'sup': local_support, 'res': local_resistance
+            'df': df, 'sup': local_support, 'res': local_resistance, 'trend': trend_50, 'rsi': rsi,
+            'is_signal_active': is_signal_active
         }
-    except Exception as e:
+    except:
         return None
 
-# ================= 👑 THE FATHER: BITCOIN (MAIN TERMINAL) =================
-btc_data = get_scalp_signal("BTC/USDT")
+# ডাটা ফেচ করা হচ্ছে
+btc_radar = fetch_coin_radar("BTC/USDT")
+eth_radar = fetch_coin_radar("ETH/USDT")
+sol_radar = fetch_coin_radar("SOL/USDT")
+doge_radar = fetch_coin_radar("DOGE/USDT")
 
-if btc_data:
-    st.markdown("### 📊 MASTER ASSET: BITCOIN")
-    c1, c2 = st.columns([1, 2.5])
+# ================= 🔔 গ্লোবাল নোটিফিকেশন (যেকোনো কয়েনের চার্টে থাকলেই পপ-আপ আসবে) =================
+radars = {"BTC": btc_radar, "ETH": eth_radar, "SOL": sol_radar, "DOGE": doge_radar}
+for coin_symbol, data in radars.items():
+    if data and data['is_signal_active']:
+        st.toast(f"🔥 {coin_symbol} SIGNAL DETECTED: {data['signal']}!", icon="🔔")
+
+# বাটন টেক্সট ফরম্যাট করার জন্য ছোট ফাংশন
+def get_button_label(emoji, name, radar, decimals=2):
+    if not radar: return f"{emoji} {name}\nError"
+    price_str = f"${radar['price']:,.{decimals}f}"
+    # যদি সিগন্যাল থাকে, তবে বাটনেই সেটা বড় করে দেখাবে
+    if radar['is_signal_active']:
+        return f"{emoji} {name}\n{price_str}\n🔥 {radar['signal']}"
+    else:
+        return f"{emoji} {name}\n{price_str}"
+
+# ================= 👑 ওপরের বাটন প্যানেল =================
+m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
+with m_col1:
+    if st.button(get_button_label("👑", "BTC/USDT", btc_radar)):
+        st.session_state.active_coin = "BTC/USDT"
+with m_col2:
+    if st.button(get_button_label("💠", "ETH/USDT", eth_radar)):
+        st.session_state.active_coin = "ETH/USDT"
+with m_col3:
+    if st.button(get_button_label("🚀", "SOL/USDT", sol_radar)):
+        st.session_state.active_coin = "SOL/USDT"
+with m_col4:
+    if st.button(get_button_label("🐕", "DOGE/USDT", doge_radar, decimals=4)):
+        st.session_state.active_coin = "DOGE/USDT"
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ================= ⚡ মেইন ডিটেইল টার্মিনাল =================
+radar_map = {
+    "BTC/USDT": btc_radar,
+    "ETH/USDT": eth_radar,
+    "SOL/USDT": sol_radar,
+    "DOGE/USDT": doge_radar
+}
+
+active_data = radar_map[st.session_state.active_coin]
+active_name = st.session_state.active_coin
+
+if active_data:
+    col_panel, col_chart = st.columns([1, 2.5])
     
-    with c1:
+    with col_panel:
+        dec = 4 if "DOGE" in active_name else 2
         st.markdown(f"""
-        <div class="pro-card">
-            <div class="coin-name">BTC/USDT</div>
-            <div class="price-text" style="color:{btc_data['color']}">${btc_data['price']:,.2f}</div>
-            <div class="signal-text {btc_data['css']}">{btc_data['signal']}</div>
+        <div class="main-detail-card">
+            <div style="font-size:14px; color:#848E9C; font-weight:bold; text-transform:uppercase;">SELECTED ASSET</div>
+            <div class="coin-name" style="font-size:32px; color:#FCD535; font-weight:900;">{active_name}</div>
+            <div class="price-text" style="color:{active_data['color']}; font-size:38px; font-weight:bold; margin-bottom:5px;">${active_data['price']:,.{dec}f}</div>
+            <div class="signal-text {active_data['css']}" style="text-align:center; font-size:24px; margin-bottom:20px; background: rgba(0,0,0,0.3); padding:10px; border-radius:8px;">{active_data['signal']}</div>
             <hr>
-            <div style="text-align:left; color:#848E9C; font-size:14px;">
-                <b>🎯 Target (TP):</b> <span style="color:#EAECEF; float:right;">${btc_data['res']:,.2f}</span><br>
-                <b>🛡️ Stop Loss (SL):</b> <span style="color:#EAECEF; float:right;">${btc_data['sup']:,.2f}</span>
+            <div style="text-align:left; font-size:15px; line-height:2.2; color:#848E9C;">
+                <b>🛡️ 50 EMA Trend:</b> <span style="color:#EAECEF; float:right;">{active_data['trend']}</span><br>
+                <b>🔮 RSI (14):</b> <span style="color:#EAECEF; float:right;">{active_data['rsi']:.1f}</span><br>
+                <hr style="margin:10px 0;">
+                <b style="color:#00E676;">🎯 TARGET (TP):</b> <span style="color:#00E676; float:right; font-weight:bold; font-size:18px;">${active_data['res']:,.{dec}f}</span><br>
+                <b style="color:#FF1744;">🛑 STOP LOSS:</b> <span style="color:#FF1744; float:right; font-weight:bold; font-size:18px;">${active_data['sup']:,.{dec}f}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-    with c2:
-        fig = go.Figure(data=[go.Candlestick(x=btc_data['df'].index, open=btc_data['df']['open'], high=btc_data['df']['high'], low=btc_data['df']['low'], close=btc_data['df']['close'], name='Price')])
-        fig.add_trace(go.Scatter(x=btc_data['df'].index, y=btc_data['df']['ema_9'], name='EMA 9', line=dict(color='#00BFFF', width=2)))
-        fig.add_trace(go.Scatter(x=btc_data['df'].index, y=btc_data['df']['ema_20'], name='EMA 20', line=dict(color='#FF8C00', width=2)))
-        fig.add_trace(go.Scatter(x=btc_data['df'].index, y=btc_data['df']['ema_50'], name='EMA 50 (Shield)', line=dict(color='#FCD535', width=3, dash='dot')))
+    with col_chart:
+        fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'], name='Price')])
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_9'], name='EMA 9 (Fast)', line=dict(color='#00BFFF', width=2)))
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_20'], name='EMA 20 (Slow)', line=dict(color='#FF8C00', width=2)))
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_50'], name='EMA 50 (Shield)', line=dict(color='#FCD535', width=3, dash='dot')))
+        fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
+        fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
+        
         fig.update_layout(
-            template="plotly_dark", height=320, margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False,
+            template="plotly_dark", height=420, margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False,
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#848E9C')
         )
         st.plotly_chart(fig, use_container_width=True)
 
-st.markdown("<br><hr>", unsafe_allow_html=True)
-
-# ================= ⚡ FAST SCALPING RADAR (ALTCOINS) =================
-st.markdown("### ⚡ ALTCOIN RADAR")
-
-col_eth, col_sol, col_doge = st.columns(3)
-
-def render_altcoin_card(coin_name, display_name, col_obj, decimals=2):
-    data = get_scalp_signal(coin_name)
-    if data:
-        price_fmt = f"${data['price']:,.{decimals}f}"
-        tp_fmt = f"${data['res']:,.{decimals}f}"
-        sl_fmt = f"${data['sup']:,.{decimals}f}"
-        
-        with col_obj:
-            st.markdown(f"""
-            <div class="pro-card">
-                <div class="coin-name">{display_name}</div>
-                <div class="price-text" style="color:{data['color']}">{price_fmt}</div>
-                <div class="signal-text {data['css']}">{data['signal']}</div>
-                <hr style="margin: 15px 0;">
-                <div style="display:flex; justify-content:space-between; font-size:13px;">
-                    <span style="color:#00E676;">🎯 TP: {tp_fmt}</span>
-                    <span style="color:#FF1744;">🛡️ SL: {sl_fmt}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-render_altcoin_card("ETH/USDT", "💠 ETHEREUM", col_eth, decimals=2)
-render_altcoin_card("SOL/USDT", "🚀 SOLANA", col_sol, decimals=2)
-render_altcoin_card("DOGE/USDT", "🐕 DOGECOIN", col_doge, decimals=4)
-
-# Auto Refresh Hidden Engine
+# Live Engine Auto Refresh (15 seconds)
 time.sleep(15)
 st.rerun()
