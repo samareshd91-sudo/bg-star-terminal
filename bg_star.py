@@ -13,6 +13,7 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #0B0E11 !important;
         color: #EAECEF !important;
+        overscroll-behavior: none !important; /* স্ক্রল করার সময় পেজ বাউন্স করা বন্ধ করবে */
     }
     .brand-title {
         font-size: 36px;
@@ -25,7 +26,7 @@ st.markdown("""
         letter-spacing: 3px;
         margin-bottom: 0px;
     }
-    .sub-title { text-align: center; color: #848E9C; font-size: 14px; margin-bottom: 25px; }
+    .sub-title { text-align: center; color: #848E9C; font-size: 14px; margin-bottom: 15px; }
     
     .buy-glow { color: #00E676; font-weight: 900; text-shadow: 0px 0px 8px rgba(0,230,118,0.4); }
     .sell-glow { color: #FF1744; font-weight: 900; text-shadow: 0px 0px 8px rgba(255,23,68,0.4); }
@@ -57,7 +58,6 @@ st.markdown("""
     }
     hr { border-color: #2B3139; }
     
-    /* Expander Text Color Fix for Dark Theme */
     .streamlit-expanderContent { color: #EAECEF !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -70,6 +70,11 @@ if 'active_coin' not in st.session_state:
 
 st.markdown('<div class="brand-title">BG STAR PRO TERMINAL</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">🔴 LIVE ALGORITHMIC RADAR | GLOBAL SIGNAL ALERTS ACTIVE</div>', unsafe_allow_html=True)
+
+# 🛑 অটো-রিফ্রেশ কন্ট্রোল বাটন (চার্ট দেখার সময় এটা অফ করে নেবেন)
+col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
+with col_toggle2:
+    auto_refresh = st.toggle("🟢 Live Auto-Refresh (চার্ট জুম করার সময় এটি বন্ধ রাখুন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -134,13 +139,11 @@ def fetch_coin_radar(coin):
     except:
         return None
 
-# ডাটা ফেচ করা হচ্ছে
 btc_radar = fetch_coin_radar("BTC/USDT")
 eth_radar = fetch_coin_radar("ETH/USDT")
 sol_radar = fetch_coin_radar("SOL/USDT")
 doge_radar = fetch_coin_radar("DOGE/USDT")
 
-# ================= 🔔 গ্লোবাল নোটিফিকেশন =================
 radars = {"BTC": btc_radar, "ETH": eth_radar, "SOL": sol_radar, "DOGE": doge_radar}
 for coin_symbol, data in radars.items():
     if data and data['is_signal_active']:
@@ -154,7 +157,6 @@ def get_button_label(emoji, name, radar, decimals=2):
     else:
         return f"{emoji} {name}\n{price_str}"
 
-# ================= 👑 ওপরের বাটন প্যানেল =================
 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
 with m_col1:
@@ -168,7 +170,6 @@ with m_col4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ================= ⚡ মেইন ডিটেইল টার্মিনাল =================
 active_data = radars[st.session_state.active_coin.split("/")[0]]
 active_name = st.session_state.active_coin
 
@@ -202,34 +203,48 @@ if active_data:
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
+        # 📱 Mobile Friendly Chart Settings
         fig.update_layout(
-            template="plotly_dark", height=420, margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False,
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#848E9C')
+            template="plotly_dark", 
+            height=420, 
+            margin=dict(l=0, r=0, t=0, b=0), 
+            xaxis_rangeslider_visible=False,
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            font=dict(color='#848E9C'),
+            dragmode='pan', # আঙুল দিয়ে সরালে চার্ট সরবে, জুম বক্স হবে না
+            hovermode='x unified'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        # X এবং Y অক্ষকে ফ্রি করা হলো
+        fig.update_xaxes(fixedrange=False)
+        fig.update_yaxes(fixedrange=False)
+        
+        # Streamlit এ Mobile Config পাঠানো হলো
+        st.plotly_chart(
+            fig, 
+            use_container_width=True, 
+            config={
+                'scrollZoom': True, # Pinch-to-zoom চালু
+                'displayModeBar': False, # মোবাইলে ওপরের বিরক্তিকর মেনুবার লুকানো
+                'doubleClick': 'reset'
+            }
+        )
 
     st.markdown("---")
 
-    # ================= 📖 আপনার প্রিয় বাংলা এনালাইসিস প্যানেল =================
     with st.expander(f"🔍 এখানে টিপুন: {active_name} এর সহজ বাংলায় এনালাইসিস রিপোর্ট"):
         st.markdown(f"### 🧠 বটের লাইভ মার্কেট রিডিং")
         smc_analysis = []
-        
         smc_analysis.append(f"**১. সেফটি শিল্ড (50 EMA):** {active_data['trend']}।")
-        
         cross_status = "BULLISH 🟢 (9 EMA ওপরে)" if active_data['ema_bullish'] else "BEARISH 🔴 (9 EMA নিচে)"
         smc_analysis.append(f"**২. অ্যাকশন লাইন (9/20):** {cross_status}।")
-
         rsi_val = active_data['rsi']
         rsi_status = "OVERSOLD 🟢 (দাম সস্তা)" if rsi_val < 45 else "OVERBOUGHT 🔴 (দাম চড়া)" if rsi_val > 60 else "NEUTRAL ⚪ (মাঝামাঝি)"
         smc_analysis.append(f"**৩. RSI পজিশন:** {rsi_val:.1f} ({rsi_status})।")
-        
         vol_status = "🟢 হাই ভলিউম (বড় ট্রেডাররা আছে)" if active_data['is_volume_high'] else "🔴 লো ভলিউম (মার্কেট আটকে আছে)"
         smc_analysis.append(f"**৪. ভলিউম:** {vol_status}।")
-
         st.info(f"**📊 লাইভ ডাটা:** {' '.join(smc_analysis)}")
 
-        # বটের ফাইনাল রায় (সহজ বাংলায়)
         if "BUY" in active_data['signal']:
             st.success(f"**🟢 বটের নির্দেশ:** এখন মার্কেটে কেনার (BUY) জন্য সব লজিক মিলে গেছে। এন্ট্রি নিতে পারেন। টার্গেট: ${active_data['res']:,.{dec}f}, স্টপ লস: ${active_data['sup']:,.{dec}f}")
         elif "SELL" in active_data['signal']:
@@ -239,6 +254,6 @@ if active_data:
         else:
             st.write("⚪ **বটের নির্দেশ:** নো-ট্রেড জোন। এখনো সব ইন্ডিকেটর একসাথে সিগন্যাল দেয়নি। সঠিক সুযোগের জন্য অপেক্ষা করুন।")
 
-# Live Engine Auto Refresh (15 seconds)
-time.sleep(15)
-st.rerun()
+if auto_refresh:
+    time.sleep(15)
+    st.rerun()
