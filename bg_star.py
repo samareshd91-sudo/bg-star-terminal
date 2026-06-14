@@ -19,12 +19,15 @@ st.markdown("""
     .wallet-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 20px; text-align: center; }
     .wallet-val { font-size: 28px; font-weight: bold; margin-top: 5px; }
     
-    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px; margin-bottom: 10px; }
+    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px; margin-bottom: 5px; }
     .pos-long { border-left-color: #00FF00; }
     .pos-short { border-left-color: #FF0000; }
     
     .buy-glow { color: #00FF00; font-weight: 900; }
     .sell-glow { color: #FF0000; font-weight: 900; }
+    
+    /* Buttons */
+    div.stButton > button { border-radius: 8px !important; font-weight: bold !important; transition: all 0.3s ease !important; width: 100% !important; }
     
     hr { border-color: #2B3139; margin: 15px 0; }
     </style>
@@ -35,7 +38,7 @@ selected_tf = "15m"
 FEE_RATE = 0.0005 # 0.05% Exchange Fee
 VIRTUAL_LEVERAGE = 10 # 10x Leverage for realistic paper trading
 
-# ================= 🧠 Bot Memory Setup (Paper Trading) =================
+# ================= 🧠 Bot Memory Setup =================
 if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
 if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_inr = 1000.0
 if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 1000.0
@@ -43,11 +46,11 @@ if 'bot_positions' not in st.session_state: st.session_state.bot_positions = {}
 if 'bot_history' not in st.session_state: st.session_state.bot_history = [] 
 
 st.markdown('<div class="brand-title">BG STAR PAPER TRADING AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">🟢 LIVE AUTO-EXECUTION ENGINE | ₹1000 INR VIRTUAL PORTFOLIO</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">🟢 LIVE AUTO-EXECUTION ENGINE & MANUAL OVERRIDE | ₹1000 INR VIRTUAL PORTFOLIO</div>', unsafe_allow_html=True)
 
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Auto-Trading & Refresh Active (প্রতি ১৫ সেকেন্ডে আপডেট হবে)", value=True)
+    auto_refresh = st.toggle("🟢 Auto-Refresh (ম্যানুয়াল বাটন চাপার আগে এটি ৫ সেকেন্ডের জন্য অফ করে নেবেন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -81,7 +84,7 @@ def fetch_coin_radar(coin):
         local_support = df['low'].tail(15).min()
         local_resistance = df['high'].tail(15).max()
         
-        # 🕯️ AI Candlestick Engine
+        # 🕯️ AI Candlestick
         curr_O, curr_C, curr_H, curr_L = df['open'].iloc[-1], df['close'].iloc[-1], df['high'].iloc[-1], df['low'].iloc[-1]
         prev_O, prev_C = df['open'].iloc[-2], df['close'].iloc[-2]
         
@@ -145,38 +148,33 @@ for coin, data in radars.items():
         # Calculate Live PnL
         if pos['dir'] == "LONG":
             pnl_pct = ((current_price - pos['entry']) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price >= pos['tp']: close_trade, reason = True, "🎯 TP Hit (Profit)"
-            elif current_price <= pos['sl']: close_trade, reason = True, "🛑 SL Hit (Loss)"
-            elif data['dir'] == "SHORT": close_trade, reason = True, "🔄 Signal Reversed"
+            if current_price >= pos['tp']: close_trade, reason = True, "🎯 TP Hit (Auto Profit)"
+            elif current_price <= pos['sl']: close_trade, reason = True, "🛑 SL Hit (Auto Loss)"
         else:
             pnl_pct = ((pos['entry'] - current_price) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price <= pos['tp']: close_trade, reason = True, "🎯 TP Hit (Profit)"
-            elif current_price >= pos['sl']: close_trade, reason = True, "🛑 SL Hit (Loss)"
-            elif data['dir'] == "LONG": close_trade, reason = True, "🔄 Signal Reversed"
+            if current_price <= pos['tp']: close_trade, reason = True, "🎯 TP Hit (Auto Profit)"
+            elif current_price >= pos['sl']: close_trade, reason = True, "🛑 SL Hit (Auto Loss)"
             
         pos['live_pnl'] = pos['invested_inr'] * pnl_pct
             
         if close_trade:
             gross_pnl_inr = pos['live_pnl']
-            fee_inr = pos['invested_inr'] * FEE_RATE * 2 # Open + Close fee
+            fee_inr = pos['invested_inr'] * FEE_RATE * 2 
             net_pnl_inr = gross_pnl_inr - fee_inr
             
-            # Update Balances
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
-            st.session_state.total_balance_inr = st.session_state.available_balance_inr + sum(p['invested_inr'] for k, p in st.session_state.bot_positions.items() if k != coin)
             
-            # Log History
             st.session_state.bot_history.insert(0, {
                 'time': datetime.now().strftime("%H:%M:%S"),
                 'coin': coin, 'dir': pos['dir'], 'entry': pos['entry'], 'exit': current_price,
                 'reason': reason, 'pnl': net_pnl_inr, 'fee': fee_inr
             })
             del st.session_state.bot_positions[coin]
-            st.toast(f"Trade Closed: {coin} | {reason} | PnL: ₹{net_pnl_inr:.2f}", icon="✅")
+            st.toast(f"Auto-Closed: {coin} | PnL: ₹{net_pnl_inr:.2f}", icon="✅")
 
     # 2. Take New Entries
     if coin not in st.session_state.bot_positions and data['is_signal_active']:
-        invest_amount = st.session_state.total_balance_inr * 0.10 # Bot uses 10% of total portfolio
+        invest_amount = (st.session_state.available_balance_inr + sum(p['invested_inr'] for p in st.session_state.bot_positions.values())) * 0.10
         
         if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
             st.session_state.available_balance_inr -= invest_amount
@@ -188,9 +186,9 @@ for coin, data in radars.items():
                 'dir': data['dir'], 'entry': current_price, 
                 'invested_inr': invest_amount, 'tp': tp, 'sl': sl, 'live_pnl': 0.0
             }
-            st.toast(f"New Trade Executed: {coin} {data['dir']} at ${current_price:,.2f}", icon="🚀")
+            st.toast(f"Auto Trade Executed: {coin} {data['dir']}", icon="🤖")
 
-# Recalculate Total Balance (Available + Invested + Live Unrealized PnL)
+# Recalculate Total Balance
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 unrealized_pnl = sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + unrealized_pnl
@@ -213,43 +211,54 @@ with w_col4:
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ================= 🔴 POSITIONS & HISTORY (BINANCE STYLE) =================
+# ================= 🔴 POSITIONS & HISTORY =================
 col_pos, col_hist = st.columns([1.2, 1])
 
 with col_pos:
     st.markdown("<h4 style='color:#EAECEF;'>🟢 Live Positions (অ্যাক্টিভ ট্রেড)</h4>", unsafe_allow_html=True)
     if not st.session_state.bot_positions:
-        st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>বট এখন সিগন্যালের জন্য অপেক্ষা করছে... কোনো রানিং ট্রেড নেই।</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>কোনো রানিং ট্রেড নেই...</div>", unsafe_allow_html=True)
     else:
-        for c, p in st.session_state.bot_positions.items():
+        # We need to copy the keys because we might delete an item during iteration
+        for c in list(st.session_state.bot_positions.keys()):
+            p = st.session_state.bot_positions[c]
             curr_p = radars[c]['price']
             card_class = "pos-long" if p['dir'] == "LONG" else "pos-short"
             pnl_color = "#00FF00" if p['live_pnl'] >= 0 else "#FF0000"
+            
             st.markdown(f"""
                 <div class="pos-card {card_class}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <span style="font-size:20px; font-weight:bold; color:#EAECEF;">{c}</span> 
-                            <span style="background-color:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']} 10x</span>
-                        </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:12px; color:#848E9C;">Live PnL (INR)</div>
-                            <div style="font-size:20px; font-weight:bold; color:{pnl_color};">₹{p['live_pnl']:,.2f}</div>
-                        </div>
+                        <div><span style="font-size:20px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background-color:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']} 10x</span></div>
+                        <div style="text-align:right;"><div style="font-size:12px; color:#848E9C;">Live PnL</div><div style="font-size:20px; font-weight:bold; color:{pnl_color};">₹{p['live_pnl']:,.2f}</div></div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:14px; color:#848E9C;">
-                        <div>Entry: <span style="color:#EAECEF;">${p['entry']:,.2f}</span><br>Current: <span style="color:#FCD535;">${curr_p:,.2f}</span></div>
-                        <div style="text-align:right;">Invested: <span style="color:#EAECEF;">₹{p['invested_inr']:,.2f}</span><br>Target: <span style="color:#00FF00;">${p['tp']:,.2f}</span> | SL: <span style="color:#FF0000;">${p['sl']:,.2f}</span></div>
+                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:14px; color:#848E9C;">
+                        <div>Entry: <span style="color:#EAECEF;">${p['entry']:,.2f}</span></div>
+                        <div style="text-align:right;">Invested: <span style="color:#EAECEF;">₹{p['invested_inr']:,.2f}</span></div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+            
+            # 🛑 MANUAL EXIT BUTTON
+            if st.button(f"💰 Book Profit / Close {c} Now", key=f"close_{c}"):
+                fee_inr = p['invested_inr'] * FEE_RATE * 2
+                net_pnl_inr = p['live_pnl'] - fee_inr
+                st.session_state.available_balance_inr += p['invested_inr'] + net_pnl_inr
+                
+                st.session_state.bot_history.insert(0, {
+                    'time': datetime.now().strftime("%H:%M:%S"),
+                    'coin': c, 'dir': p['dir'], 'entry': p['entry'], 'exit': curr_p,
+                    'reason': "✋ Manual Close", 'pnl': net_pnl_inr, 'fee': fee_inr
+                })
+                del st.session_state.bot_positions[c]
+                st.rerun()
 
 with col_hist:
     st.markdown("<h4 style='color:#EAECEF;'>📜 Trade History (হিসাবের খাতা)</h4>", unsafe_allow_html=True)
     if not st.session_state.bot_history:
-        st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>এখনো কোনো ট্রেড ক্লোজ হয়নি।</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>কোনো ট্রেড ক্লোজ হয়নি।</div>", unsafe_allow_html=True)
     else:
-        for h in st.session_state.bot_history[:5]: # Last 5 trades
+        for h in st.session_state.bot_history[:5]: 
             pnl_color = "#00FF00" if h['pnl'] > 0 else "#FF0000"
             st.markdown(f"""
                 <div style="background-color:#181A20; border: 1px solid #2B3139; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
@@ -258,15 +267,15 @@ with col_hist:
                         <span style="font-weight:bold; color:{pnl_color};">₹{h['pnl']:,.2f}</span>
                     </div>
                     <div style="font-size:12px; color:#848E9C; margin-top:5px;">
-                        {h['time']} | {h['reason']}<br>
-                        Entry: ${h['entry']:,.2f} → Exit: ${h['exit']:,.2f} (Fee: ₹{h['fee']:.2f})
+                        {h['time']} | <b>{h['reason']}</b><br>
+                        Entry: ${h['entry']:,.2f} → Exit: ${h['exit']:,.2f}
                     </div>
                 </div>
             """, unsafe_allow_html=True)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# Navigation & Chart 
+# ================= ⚡ MANUAL ENTRY & CHARTS =================
 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 def get_btn(emoji, name, radar): return f"{emoji} {name}\n${radar['price']:,.2f}" if radar else f"{name} Error"
 with m_col1:
@@ -295,14 +304,40 @@ if active_data:
         <div style="background: linear-gradient(135deg, #1E2329 0%, #14181C 100%); border-radius: 12px; padding: 15px; border: 1px solid #2B3139;">
             <div style="text-align:center; font-size:20px; font-weight:bold; color:#FCD535; margin-bottom:10px;">{st.session_state.active_coin}</div>
             <div class="{active_data['css']}" style="text-align:center; font-size:18px; margin-bottom:15px; background: rgba(0,0,0,0.3); padding:8px; border-radius:6px;">{active_data['signal']}</div>
-            <div style="font-size:13px; color:#848E9C; line-height:2;">
-                <b>🧠 বটের লজিক:</b><br>
-                • <b>ট্রেন্ড (50 EMA):</b> <span style="color:#EAECEF;">{active_data['trend']}</span><br>
-                • <b>ক্যান্ডেল:</b> <span style="color:#FCD535;">{active_data['pattern']}</span><br>
-                • <b>RSI (14):</b> <span style="color:#EAECEF;">{active_data['rsi']:.1f}</span>
-            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # 🎮 MANUAL ENTRY OVERRIDE BUTTONS
+        st.markdown("<div style='text-align:center; font-size:13px; color:#848E9C; margin: 10px 0;'>🎮 Manual Override (Force Entry)</div>", unsafe_allow_html=True)
+        
+        btn_col1, btn_col2 = st.columns(2)
+        c_name = st.session_state.active_coin.split("/")[0]
+        
+        with btn_col1:
+            if st.button("🟢 Force BUY", key=f"force_buy_{c_name}"):
+                if c_name not in st.session_state.bot_positions:
+                    invest_amount = (st.session_state.available_balance_inr + sum(p['invested_inr'] for p in st.session_state.bot_positions.values())) * 0.10
+                    if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
+                        st.session_state.available_balance_inr -= invest_amount
+                        tp = active_data['price'] * 1.02 # Manual 2% TP
+                        sl = active_data['price'] * 0.99 # Manual 1% SL
+                        st.session_state.bot_positions[c_name] = {'dir': "LONG", 'entry': active_data['price'], 'invested_inr': invest_amount, 'tp': tp, 'sl': sl, 'live_pnl': 0.0}
+                        st.rerun()
+                else:
+                    st.toast("Trade already active!", icon="⚠️")
+                    
+        with btn_col2:
+            if st.button("🔴 Force SELL", key=f"force_sell_{c_name}"):
+                if c_name not in st.session_state.bot_positions:
+                    invest_amount = (st.session_state.available_balance_inr + sum(p['invested_inr'] for p in st.session_state.bot_positions.values())) * 0.10
+                    if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
+                        st.session_state.available_balance_inr -= invest_amount
+                        tp = active_data['price'] * 0.98 # Manual 2% TP
+                        sl = active_data['price'] * 1.01 # Manual 1% SL
+                        st.session_state.bot_positions[c_name] = {'dir': "SHORT", 'entry': active_data['price'], 'invested_inr': invest_amount, 'tp': tp, 'sl': sl, 'live_pnl': 0.0}
+                        st.rerun()
+                else:
+                    st.toast("Trade already active!", icon="⚠️")
 
 if auto_refresh:
     time.sleep(15)
