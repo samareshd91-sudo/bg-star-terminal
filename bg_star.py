@@ -56,6 +56,9 @@ st.markdown("""
         transform: translateY(-2px);
     }
     hr { border-color: #2B3139; }
+    
+    /* Expander Text Color Fix for Dark Theme */
+    .streamlit-expanderContent { color: #EAECEF !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +128,8 @@ def fetch_coin_radar(coin):
         return {
             'price': curr_price, 'signal': signal_text, 'css': css_class, 'color': color_code,
             'df': df, 'sup': local_support, 'res': local_resistance, 'trend': trend_50, 'rsi': rsi,
-            'is_signal_active': is_signal_active
+            'is_signal_active': is_signal_active,
+            'ema_bullish': ema_bullish, 'is_volume_high': is_volume_high
         }
     except:
         return None
@@ -136,17 +140,15 @@ eth_radar = fetch_coin_radar("ETH/USDT")
 sol_radar = fetch_coin_radar("SOL/USDT")
 doge_radar = fetch_coin_radar("DOGE/USDT")
 
-# ================= 🔔 গ্লোবাল নোটিফিকেশন (যেকোনো কয়েনের চার্টে থাকলেই পপ-আপ আসবে) =================
+# ================= 🔔 গ্লোবাল নোটিফিকেশন =================
 radars = {"BTC": btc_radar, "ETH": eth_radar, "SOL": sol_radar, "DOGE": doge_radar}
 for coin_symbol, data in radars.items():
     if data and data['is_signal_active']:
         st.toast(f"🔥 {coin_symbol} SIGNAL DETECTED: {data['signal']}!", icon="🔔")
 
-# বাটন টেক্সট ফরম্যাট করার জন্য ছোট ফাংশন
 def get_button_label(emoji, name, radar, decimals=2):
     if not radar: return f"{emoji} {name}\nError"
     price_str = f"${radar['price']:,.{decimals}f}"
-    # যদি সিগন্যাল থাকে, তবে বাটনেই সেটা বড় করে দেখাবে
     if radar['is_signal_active']:
         return f"{emoji} {name}\n{price_str}\n🔥 {radar['signal']}"
     else:
@@ -156,36 +158,25 @@ def get_button_label(emoji, name, radar, decimals=2):
 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
 with m_col1:
-    if st.button(get_button_label("👑", "BTC/USDT", btc_radar)):
-        st.session_state.active_coin = "BTC/USDT"
+    if st.button(get_button_label("👑", "BTC/USDT", btc_radar)): st.session_state.active_coin = "BTC/USDT"
 with m_col2:
-    if st.button(get_button_label("💠", "ETH/USDT", eth_radar)):
-        st.session_state.active_coin = "ETH/USDT"
+    if st.button(get_button_label("💠", "ETH/USDT", eth_radar)): st.session_state.active_coin = "ETH/USDT"
 with m_col3:
-    if st.button(get_button_label("🚀", "SOL/USDT", sol_radar)):
-        st.session_state.active_coin = "SOL/USDT"
+    if st.button(get_button_label("🚀", "SOL/USDT", sol_radar)): st.session_state.active_coin = "SOL/USDT"
 with m_col4:
-    if st.button(get_button_label("🐕", "DOGE/USDT", doge_radar, decimals=4)):
-        st.session_state.active_coin = "DOGE/USDT"
+    if st.button(get_button_label("🐕", "DOGE/USDT", doge_radar, decimals=4)): st.session_state.active_coin = "DOGE/USDT"
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ================= ⚡ মেইন ডিটেইল টার্মিনাল =================
-radar_map = {
-    "BTC/USDT": btc_radar,
-    "ETH/USDT": eth_radar,
-    "SOL/USDT": sol_radar,
-    "DOGE/USDT": doge_radar
-}
-
-active_data = radar_map[st.session_state.active_coin]
+active_data = radars[st.session_state.active_coin.split("/")[0]]
 active_name = st.session_state.active_coin
 
 if active_data:
     col_panel, col_chart = st.columns([1, 2.5])
+    dec = 4 if "DOGE" in active_name else 2
     
     with col_panel:
-        dec = 4 if "DOGE" in active_name else 2
         st.markdown(f"""
         <div class="main-detail-card">
             <div style="font-size:14px; color:#848E9C; font-weight:bold; text-transform:uppercase;">SELECTED ASSET</div>
@@ -205,9 +196,9 @@ if active_data:
         
     with col_chart:
         fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'], name='Price')])
-        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_9'], name='EMA 9 (Fast)', line=dict(color='#00BFFF', width=2)))
-        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_20'], name='EMA 20 (Slow)', line=dict(color='#FF8C00', width=2)))
-        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_50'], name='EMA 50 (Shield)', line=dict(color='#FCD535', width=3, dash='dot')))
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_9'], name='EMA 9', line=dict(color='#00BFFF', width=2)))
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_20'], name='EMA 20', line=dict(color='#FF8C00', width=2)))
+        fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_50'], name='EMA 50', line=dict(color='#FCD535', width=3, dash='dot')))
         fig.add_hline(y=active_data['sup'], line_dash="dash", line_color="#00ff00", opacity=0.5)
         fig.add_hline(y=active_data['res'], line_dash="dash", line_color="#ff0000", opacity=0.5)
         
@@ -216,6 +207,37 @@ if active_data:
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#848E9C')
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+
+    # ================= 📖 আপনার প্রিয় বাংলা এনালাইসিস প্যানেল =================
+    with st.expander(f"🔍 এখানে টিপুন: {active_name} এর সহজ বাংলায় এনালাইসিস রিপোর্ট"):
+        st.markdown(f"### 🧠 বটের লাইভ মার্কেট রিডিং")
+        smc_analysis = []
+        
+        smc_analysis.append(f"**১. সেফটি শিল্ড (50 EMA):** {active_data['trend']}।")
+        
+        cross_status = "BULLISH 🟢 (9 EMA ওপরে)" if active_data['ema_bullish'] else "BEARISH 🔴 (9 EMA নিচে)"
+        smc_analysis.append(f"**২. অ্যাকশন লাইন (9/20):** {cross_status}।")
+
+        rsi_val = active_data['rsi']
+        rsi_status = "OVERSOLD 🟢 (দাম সস্তা)" if rsi_val < 45 else "OVERBOUGHT 🔴 (দাম চড়া)" if rsi_val > 60 else "NEUTRAL ⚪ (মাঝামাঝি)"
+        smc_analysis.append(f"**৩. RSI পজিশন:** {rsi_val:.1f} ({rsi_status})।")
+        
+        vol_status = "🟢 হাই ভলিউম (বড় ট্রেডাররা আছে)" if active_data['is_volume_high'] else "🔴 লো ভলিউম (মার্কেট আটকে আছে)"
+        smc_analysis.append(f"**৪. ভলিউম:** {vol_status}।")
+
+        st.info(f"**📊 লাইভ ডাটা:** {' '.join(smc_analysis)}")
+
+        # বটের ফাইনাল রায় (সহজ বাংলায়)
+        if "BUY" in active_data['signal']:
+            st.success(f"**🟢 বটের নির্দেশ:** এখন মার্কেটে কেনার (BUY) জন্য সব লজিক মিলে গেছে। এন্ট্রি নিতে পারেন। টার্গেট: ${active_data['res']:,.{dec}f}, স্টপ লস: ${active_data['sup']:,.{dec}f}")
+        elif "SELL" in active_data['signal']:
+            st.error(f"**🔴 বটের নির্দেশ:** এখন মার্কেটে বিক্রির (SELL) জন্য সব লজিক মিলে গেছে। টার্গেট: ${active_data['sup']:,.{dec}f}, স্টপ লস: ${active_data['res']:,.{dec}f}")
+        elif "LOW VOL" in active_data['signal']:
+            st.warning("⚠️ **বটের নির্দেশ:** প্রাইস এবং ইন্ডিকেটর পারফেক্ট জায়গায় আছে, কিন্তু মার্কেটে এখন বড় ট্রেডাররা নেই (Volume কম)। তাই ফেক ব্রেকআউট এড়াতে চুপচাপ বসে থাকুন।")
+        else:
+            st.write("⚪ **বটের নির্দেশ:** নো-ট্রেড জোন। এখনো সব ইন্ডিকেটর একসাথে সিগন্যাল দেয়নি। সঠিক সুযোগের জন্য অপেক্ষা করুন।")
 
 # Live Engine Auto Refresh (15 seconds)
 time.sleep(15)
