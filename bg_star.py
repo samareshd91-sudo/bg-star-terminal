@@ -26,7 +26,7 @@ st.markdown("""
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "15m" 
-FEE_RATE = 0.0005 # 0.05% Taker Fee
+FEE_RATE = 0.0005 
 VIRTUAL_LEVERAGE = 10 
 
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
@@ -35,30 +35,31 @@ SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "A
 if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
 if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_inr = 10000.0
 if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 10000.0
-if 'total_fees_paid' not in st.session_state: st.session_state.total_fees_paid = 0.0 # নতুন ফি ট্র্যাকার
+if 'total_fees_paid' not in st.session_state: st.session_state.total_fees_paid = 0.0 
 if 'bot_positions' not in st.session_state: st.session_state.bot_positions = {} 
 if 'bot_history' not in st.session_state: st.session_state.bot_history = [] 
 
 st.markdown('<div class="brand-title">BG STAR PRO HYBRID-SCALPER</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">🚀 10,000 INR VIRTUAL PORTFOLIO | MANUAL SL CONTROL & PROFIT BOOKING</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">🧠 SMART AI CONFIDENCE SIZING | 10,000 INR VIRTUAL PORTFOLIO</div>', unsafe_allow_html=True)
 
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
-    auto_refresh = st.toggle("🟢 Auto-Refresh & Bot Active (SL এডিট করার সময় ৫ সেকেন্ডের জন্য অফ রাখুন)", value=True)
+    auto_refresh = st.toggle("🟢 Auto-Refresh & Bot Active (SL এডিট করার সময় অফ রাখুন)", value=True)
 
 def fetch_coin_radar(coin):
     try:
         bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
+        # ATR Calculation
         df['prev_close'] = df['close'].shift(1)
         df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
         df['atr'] = df['tr'].rolling(14).mean()
         
+        # Indicators
         df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
         df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
-        
         df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
         df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
         df['macd'] = df['ema_12'] - df['ema_26']
@@ -68,9 +69,9 @@ def fetch_coin_radar(coin):
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rsi = 100 - (100 / (1 + (gain / loss).iloc[-1]))
-        
         vol_sma = df['volume'].rolling(20).mean().iloc[-1]
         
+        # Current States
         curr_price = df['close'].iloc[-1]
         trend_50 = "BULLISH" if curr_price > df['ema_50'].iloc[-1] else "BEARISH"
         ema_bullish = df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]
@@ -80,16 +81,54 @@ def fetch_coin_radar(coin):
         local_support = df['low'].tail(15).min()
         local_resistance = df['high'].tail(15).max()
         
-        signal_text, css_class, is_signal_active, signal_dir = "WAITING...", "wait-glow", False, "NONE"
+        # 🕯️ AI Candlestick Scoring
+        curr_O, curr_C, curr_H, curr_L = df['open'].iloc[-1], df['close'].iloc[-1], df['high'].iloc[-1], df['low'].iloc[-1]
+        prev_O, prev_C = df['open'].iloc[-2], df['close'].iloc[-2]
+        curr_body = abs(curr_C - curr_O)
+        prev_body = abs(prev_C - prev_O)
+        curr_upper_shadow = curr_H - max(curr_C, curr_O)
+        curr_lower_shadow = min(curr_C, curr_O) - curr_L
         
-        if trend_50 == "BULLISH" and ema_bullish and macd_bullish and rsi < 65 and is_volume_high:
-            signal_text, css_class, is_signal_active, signal_dir = "🟢 BUY SETUP", "buy-glow", True, "LONG"
-        elif trend_50 == "BEARISH" and not ema_bullish and not macd_bullish and rsi > 35 and is_volume_high:
-            signal_text, css_class, is_signal_active, signal_dir = "🔴 SELL SETUP", "sell-glow", True, "SHORT"
+        pattern_score = 5 # Default
+        if curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body: pattern_score = 15 # Hammer
+        elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 # Shooting Star
+        elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 # Bullish Engulfing
+        elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 # Bearish Engulfing
+
+        # 🧠 AI CONFIDENCE SCORING ENGINE
+        signal_text, css_class, is_signal_active, signal_dir = "WAITING...", "wait-glow", False, "NONE"
+        ai_score = 0
+        alloc_pct = 0.0
+        
+        if trend_50 == "BULLISH" and ema_bullish and is_volume_high and rsi < 65:
+            ai_score = 50 # Base setup met
+            if macd_bullish: ai_score += 20 # Trend momentum matched
+            if rsi < 45: ai_score += 15 # Sweet spot (Oversold)
+            ai_score += pattern_score # Candlestick logic
+            ai_score = min(ai_score, 100)
+            
+            signal_text, css_class, is_signal_active, signal_dir = f"🟢 BUY ({ai_score}/100)", "buy-glow", True, "LONG"
+            
+        elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35:
+            ai_score = 50 # Base setup met
+            if not macd_bullish: ai_score += 20 # Trend momentum matched
+            if rsi > 55: ai_score += 15 # Sweet spot (Overbought)
+            ai_score += pattern_score # Candlestick logic
+            ai_score = min(ai_score, 100)
+            
+            signal_text, css_class, is_signal_active, signal_dir = f"🔴 SELL ({ai_score}/100)", "sell-glow", True, "SHORT"
+            
+        # Dynamic Fund Sizing based on Score
+        if ai_score >= 90: alloc_pct = 10.0
+        elif ai_score >= 80: alloc_pct = 7.0
+        elif ai_score >= 70: alloc_pct = 5.0
+        elif ai_score >= 60: alloc_pct = 3.0
+        elif ai_score > 0: alloc_pct = 1.0
                 
         return {
             'price': curr_price, 'signal': signal_text, 'css': css_class, 'dir': signal_dir,
-            'df': df, 'sup': local_support, 'res': local_resistance, 'atr': df['atr'].iloc[-1], 'is_signal_active': is_signal_active
+            'df': df, 'sup': local_support, 'res': local_resistance, 'atr': df['atr'].iloc[-1], 
+            'is_signal_active': is_signal_active, 'ai_score': ai_score, 'alloc_pct': alloc_pct
         }
     except Exception as e: return None
 
@@ -125,10 +164,12 @@ for symbol, data in radars.items():
             st.session_state.bot_history.insert(0, {'time': datetime.now().strftime("%H:%M:%S"), 'coin': symbol, 'dir': pos['dir'], 'entry': pos['entry'], 'exit': current_price, 'reason': reason, 'pnl': net_pnl_inr, 'fee': fee_inr})
             del st.session_state.bot_positions[symbol]
 
-    # 2. Auto Entries
+    # 2. 🧠 Smart Auto Entries (Dynamic Size)
     if symbol not in st.session_state.bot_positions and data['is_signal_active']:
-        invest_amount = 1000.0 # 10,000 এর 10% = 1000 টাকা প্রতি ট্রেডে
-        if st.session_state.available_balance_inr >= invest_amount:
+        # AI Sizing Logic here!
+        invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
+        
+        if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
             st.session_state.available_balance_inr -= invest_amount
             atr_buffer = data['atr'] * 1.5 
             if data['dir'] == "LONG":
@@ -137,7 +178,11 @@ for symbol, data in radars.items():
             else:
                 sl = data['res'] + atr_buffer
                 tp = current_price - ((sl - current_price) * 1.5)
-            st.session_state.bot_positions[symbol] = {'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 'tp': tp, 'sl': sl, 'live_pnl': 0.0}
+            st.session_state.bot_positions[symbol] = {
+                'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
+                'tp': tp, 'sl': sl, 'live_pnl': 0.0, 'score': data['ai_score'], 'pct': data['alloc_pct']
+            }
+            st.toast(f"AI Entry: {symbol} | Confidence {data['ai_score']} | Used {data['alloc_pct']}% Fund", icon="🧠")
 
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 unrealized_pnl = sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
@@ -156,29 +201,27 @@ st.markdown("<hr>", unsafe_allow_html=True)
 col_pos, col_hist = st.columns([1.3, 1])
 
 with col_pos:
-    st.markdown("<h4 style='color:#EAECEF;'>🟢 Live Positions & Controls</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#EAECEF;'>🟢 Live Positions (AI Controlled)</h4>", unsafe_allow_html=True)
     if not st.session_state.bot_positions: st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>No active trades. Scanning 8 coins...</div>", unsafe_allow_html=True)
     else:
         for c in list(st.session_state.bot_positions.keys()):
             p = st.session_state.bot_positions[c]
             curr_p = radars[c]['price']
             card_class = "pos-long" if p['dir'] == "LONG" else "pos-short"
+            ai_tag = f"🧠 Score: {p.get('score', 'Manual')} ({p.get('pct', 'Manual')}%)"
             
             st.markdown(f"""
                 <div class="pos-card {card_class}">
                     <div style="display:flex; justify-content:space-between;">
-                        <div><span style="font-size:20px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:12px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']}</span></div>
+                        <div><span style="font-size:20px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:12px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']} | {ai_tag}</span></div>
                         <div style="text-align:right;"><div style="font-size:20px; font-weight:bold; color:{'#00FF00' if p['live_pnl'] >= 0 else '#FF0000'};">₹{p['live_pnl']:,.2f}</div></div>
                     </div>
-                    <div style="font-size:13px; color:#848E9C; margin-bottom: 10px;">Entry: ${p['entry']:,.4f} | Target: <span style="color:#00FF00;">${p['tp']:,.4f}</span> | SL: <span style="color:#FF0000;">${p['sl']:,.4f}</span></div>
+                    <div style="font-size:13px; color:#848E9C; margin-bottom: 10px;">Entry: ${p['entry']:,.4f} | Margin: ₹{p['invested_inr']:,.2f} | Target: <span style="color:#00FF00;">${p['tp']:,.4f}</span></div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # 🎛️ Manual Override Controls (Close + Edit SL)
             act_col1, act_col2, act_col3 = st.columns([1.2, 1.5, 1])
-            
             with act_col1:
-                # 💰 Manual Exit (Profit Booking)
                 if st.button(f"💰 Close & Take ₹{p['live_pnl']:.2f}", key=f"close_{c}"):
                     fee = p['invested_inr'] * FEE_RATE * 2
                     net_pnl = p['live_pnl'] - fee
@@ -187,20 +230,16 @@ with col_pos:
                     st.session_state.bot_history.insert(0, {'time': datetime.now().strftime("%H:%M:%S"), 'coin': c, 'dir': p['dir'], 'entry': p['entry'], 'exit': curr_p, 'reason': "✋ Manual Exit", 'pnl': net_pnl, 'fee': fee})
                     del st.session_state.bot_positions[c]
                     st.rerun()
-                    
             with act_col2:
-                # 🛑 Dynamic SL Input
                 new_sl = st.number_input("Modify Stop-Loss", value=float(p['sl']), format="%.4f", step=0.0001, key=f"sl_in_{c}", label_visibility="collapsed")
-                
             with act_col3:
-                # ✔️ Update SL Button
                 if st.button("🔄 Set SL", key=f"upd_sl_{c}"):
                     st.session_state.bot_positions[c]['sl'] = new_sl
                     st.toast(f"Stop-Loss updated for {c}", icon="✅")
                     st.rerun()
 
 with col_hist:
-    st.markdown("<h4 style='color:#EAECEF;'>📜 Trade History (Net of Fees)</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#EAECEF;'>📜 Trade History</h4>", unsafe_allow_html=True)
     if not st.session_state.bot_history: st.markdown("<div style='color:#848E9C; text-align:center; padding:20px; background:#181A20; border-radius:8px;'>No closed trades.</div>", unsafe_allow_html=True)
     else:
         for h in st.session_state.bot_history[:5]: 
@@ -209,7 +248,7 @@ with col_hist:
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ================= ⚡ CHARTS & FORCE ENTRY =================
-st.markdown("<h4 style='text-align:center; color:#848E9C;'>📡 COIN RADAR & CHARTS</h4>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align:center; color:#848E9C;'>📡 AI COIN RADAR & CHARTS</h4>", unsafe_allow_html=True)
 def get_btn(name, radar): return f"⚡ {name}\n${radar['price']:,.4f}" if radar else f"{name} Error"
 row1, row2 = st.columns(4), st.columns(4)
 coin_keys = list(radars.keys())
@@ -230,16 +269,16 @@ if active_data:
         st.plotly_chart(fig, use_container_width=True)
     with info_col:
         st.markdown(f'<div style="background: linear-gradient(135deg, #1E2329 0%, #14181C 100%); border-radius: 12px; padding: 15px; border: 1px solid #2B3139;"><div style="text-align:center; font-size:20px; font-weight:bold; color:#FCD535; margin-bottom:10px;">{st.session_state.active_coin}</div><div class="{active_data["css"]}" style="text-align:center; font-size:18px; margin-bottom:15px; background: rgba(0,0,0,0.3); padding:8px; border-radius:6px;">{active_data["signal"]}</div></div>', unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; font-size:13px; color:#848E9C; margin: 10px 0;'>🎮 Force Trade Override</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; font-size:13px; color:#848E9C; margin: 10px 0;'>🎮 Force Trade Override (Fixed 5% Margin)</div>", unsafe_allow_html=True)
         btn_col1, btn_col2 = st.columns(2)
         c_name = st.session_state.active_coin.split("/")[0]
         with btn_col1:
             if st.button("🟢 BUY", key=f"fb_{c_name}"):
                 if c_name not in st.session_state.bot_positions:
-                    st.session_state.bot_positions[c_name] = {'dir': "LONG", 'entry': active_data['price'], 'invested_inr': 1000.0, 'tp': active_data['price']*1.02, 'sl': active_data['price']*0.99, 'live_pnl': 0.0}; st.rerun()
+                    st.session_state.bot_positions[c_name] = {'dir': "LONG", 'entry': active_data['price'], 'invested_inr': st.session_state.total_balance_inr * 0.05, 'tp': active_data['price']*1.02, 'sl': active_data['price']*0.99, 'live_pnl': 0.0}; st.rerun()
         with btn_col2:
             if st.button("🔴 SELL", key=f"fs_{c_name}"):
                 if c_name not in st.session_state.bot_positions:
-                    st.session_state.bot_positions[c_name] = {'dir': "SHORT", 'entry': active_data['price'], 'invested_inr': 1000.0, 'tp': active_data['price']*0.98, 'sl': active_data['price']*1.01, 'live_pnl': 0.0}; st.rerun()
+                    st.session_state.bot_positions[c_name] = {'dir': "SHORT", 'entry': active_data['price'], 'invested_inr': st.session_state.total_balance_inr * 0.05, 'tp': active_data['price']*0.98, 'sl': active_data['price']*1.01, 'live_pnl': 0.0}; st.rerun()
 
 if auto_refresh: time.sleep(15); st.rerun()
