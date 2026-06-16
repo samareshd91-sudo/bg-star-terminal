@@ -19,7 +19,7 @@ st.markdown("""
     
     /* 📱 কাস্টম প্রো স্ক্রলবার (চওড়াতে দ্বিগুণ এবং লম্বাতে ছোট ক্যাপসুল সাইজ) */
     ::-webkit-scrollbar { 
-        width: 36px; /* আগের ১৮px থেকে বাড়িয়ে একদম দ্বিগুণ (৩৬px) চওড়া করা হলো */
+        width: 36px; /* চওড়া করা হলো */
     }
     ::-webkit-scrollbar-track { 
         background: #0B0E11; 
@@ -29,7 +29,7 @@ st.markdown("""
         border-radius: 18px; 
         border-style: solid;
         border-color: #0B0E11;
-        border-width: 35px 6px; /* ওপর-নিচে ৩৫px বর্ডার প্যাডিং দিয়ে লম্বাতে একদম ছোট (Short) করা হলো */
+        border-width: 35px 6px; /* প্যাডিং দিয়ে লম্বাতে ছোট করা হলো */
         background-clip: padding-box;
     }
     ::-webkit-scrollbar-thumb:hover { 
@@ -112,7 +112,8 @@ def fetch_coin_radar(coin):
         
         pattern_score = 5 
         if curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body: pattern_score = 15 
-        elif curr_upper_shadow >= 2 * curr_body && curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 
+        # এখানে && এর বদলে and করে দেওয়া হলো ✅
+        elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 
         elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 
         elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 
 
@@ -281,7 +282,7 @@ active_data = radars.get(st.session_state.active_coin.split("/")[0])
 if active_data:
     chart_col, info_col = st.columns([2.5, 1])
     with chart_col:
-        fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df'].high, low=active_data['df'].low, close=active_data['df'].close)])
+        fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'])])
         fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_9'], name='EMA 9', line=dict(color='#00BFFF', width=2)))
         fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_50'], name='EMA 50', line=dict(color='#FCD535', width=3, dash='dot')))
         fig.update_layout(template="plotly_dark", height=400, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
