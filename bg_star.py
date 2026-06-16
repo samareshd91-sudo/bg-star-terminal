@@ -24,7 +24,7 @@ st.markdown("""
     }
     
     .block-container {
-        padding-top: 15px !important; /* ওপরের ফাঁকা জায়গা একদম কমানো হলো */
+        padding-top: 15px !important; 
         padding-right: 15px !important;
         padding-left: 10px !important;
     }
@@ -40,7 +40,7 @@ st.markdown("""
     ::-webkit-scrollbar-thumb:hover { background-color: #F39C12; }
 
     /* Cards & Buttons */
-    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px; margin-top: 5px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px 15px 5px 15px; margin-top: 5px; margin-bottom: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .pos-long { border-left-color: #00FF00; }
     .pos-short { border-left-color: #FF0000; }
     
@@ -56,7 +56,7 @@ st.markdown("""
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "15m" 
-FEE_RATE = 0.0005 
+FEE_RATE = 0.002 # 🪙 CoinDCX Pro Standard Fee (0.2%) Update করা হলো
 VIRTUAL_LEVERAGE = 10 
 
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
@@ -112,7 +112,6 @@ def fetch_coin_radar(coin):
         elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 
         elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 
 
-        # 🧠 Detailed Market Analysis (For Learning)
         price_spread = (local_resistance - local_support) / curr_price
         if price_spread < 0.0075:
             market_state, state_color = "↔️ SIDEWAYS", "#FCD535"
@@ -130,7 +129,6 @@ def fetch_coin_radar(coin):
         vol_status = f"🔥 HIGH ({vol_ratio:.0f}%)" if curr_vol > vol_sma else f"❄️ LOW ({vol_ratio:.0f}%)"
         vol_color = "#00FF88" if curr_vol > vol_sma else "#848E9C"
 
-        # 🎯 Sniper Signal & Paper Trade Sizing
         trend_50 = "BULLISH" if curr_price > df['ema_50'].iloc[-1] else "BEARISH"
         ema_bullish = df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]
         is_volume_high = curr_vol > vol_sma  
@@ -212,11 +210,10 @@ for symbol, data in radars.items():
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
 
-# ================= 💼 TOP: MASTER PAPER TRADING BOX (Cleaned) =================
+# ================= 💼 TOP: MASTER PAPER TRADING BOX =================
 tot_color = "#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF1744"
 pnl_color = "#00FF00" if (st.session_state.total_balance_inr - 10000) >= 0 else "#FF1744"
 
-# 🛡️ ওপরের বর্ডারওয়ালা টাইটেল লাইনটা পুরোপুরি ডিলিট করে দেওয়া হয়েছে
 st.markdown(f"""
     <div style="background: linear-gradient(135deg, #14181C 0%, #0B0E11 100%); border: 2px solid #2B3139; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 10px;">
         <div style="display:flex; justify-content:space-between; text-align:center; flex-wrap: nowrap;">
@@ -233,26 +230,52 @@ st.markdown(f"""
                 <div style="font-size:13px; font-weight:bold; color:#FCD535; white-space:nowrap;">₹{active_invested:,.1f}</div>
             </div>
             <div style="flex: 1; border-left: 1px solid #2B3139; padding: 0 2px;">
-                <div style="font-size:9px; color:#848E9C; font-weight:bold; white-space:nowrap;">FEES</div>
+                <div style="font-size:9px; color:#848E9C; font-weight:bold; white-space:nowrap;">COINDCX FEE</div>
                 <div style="font-size:13px; font-weight:bold; color:#FF1744; white-space:nowrap;">-₹{st.session_state.total_fees_paid:,.1f}</div>
             </div>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# 🟢 LIVE POSITIONS 
+# ⏸️ PAUSE SWITCH FOR EDITING SL
+pause_radar = False
+if st.session_state.bot_positions:
+    pause_radar = st.checkbox("⏸️ PAUSE RADAR (Edit SL বা Trade Close করার জন্য এটি অন করুন)", value=False)
+
+# 🟢 LIVE POSITIONS & MANUAL CONTROLS
 if st.session_state.bot_positions:
     for c in list(st.session_state.bot_positions.keys()):
         p = st.session_state.bot_positions[c]
         card_class = "pos-long" if p['dir'] == "LONG" else "pos-short"
+        
         st.markdown(f"""
             <div class="pos-card {card_class}">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div><span style="font-size:18px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:11px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']}</span></div>
                     <div style="font-size:18px; font-weight:bold; color:{'#00FF00' if p['live_pnl'] >= 0 else '#FF0000'};">₹{p['live_pnl']:,.2f}</div>
                 </div>
-            </div>
         """, unsafe_allow_html=True)
+        
+        # 🎛️ Control Buttons Box
+        col1, col2, col3 = st.columns([1.5, 1.5, 1])
+        with col1:
+            if st.button(f"💰 Close (Take ₹{p['live_pnl']:.2f})", key=f"close_{c}"):
+                fee_inr = p['invested_inr'] * FEE_RATE * 2
+                net_pnl = p['live_pnl'] - fee_inr
+                st.session_state.total_fees_paid += fee_inr
+                st.session_state.available_balance_inr += p['invested_inr'] + net_pnl
+                del st.session_state.bot_positions[c]
+                st.toast(f"✅ {c} Closed! Profit: ₹{net_pnl:.2f}", icon="💰")
+                st.rerun()
+        with col2:
+            new_sl = st.number_input("New SL", value=float(p['sl']), format="%.4f", step=0.0001, key=f"sl_in_{c}", label_visibility="collapsed")
+        with col3:
+            if st.button("🔄 Set SL", key=f"upd_sl_{c}"):
+                st.session_state.bot_positions[c]['sl'] = new_sl
+                st.toast(f"🎯 Stop-Loss Updated for {c}", icon="✅")
+                st.rerun()
+                
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ================= 🧭 MIDDLE: MARKET ANALYSIS =================
 active_symbol = st.session_state.active_coin.split("/")[0]
@@ -315,6 +338,7 @@ for i, col_box in enumerate(row1 + row2):
                 st.session_state.active_coin = f"{c_sym}/USDT"
                 st.rerun()
 
-# ⏱️ 7s BACKGROUND AUTO-REFRESH
-time.sleep(7)
-st.rerun()
+# ⏱️ 7s BACKGROUND AUTO-REFRESH (Pause থাকলে স্কিপ হবে)
+if not pause_radar:
+    time.sleep(7)
+    st.rerun()
