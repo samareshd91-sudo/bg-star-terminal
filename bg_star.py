@@ -10,7 +10,7 @@ from datetime import datetime
 # 👑 Premium Layout Config
 st.set_page_config(page_title="BG STAR MASTER TERMINAL", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Ultra-Premium CSS (Zero Top Margin & Header Hidden)
+# 🌟 Ultra-Premium CSS
 st.markdown("""
     <style>
     [data-testid="stHeader"], header, #MainMenu, footer { display: none !important; visibility: hidden !important; }
@@ -27,9 +27,15 @@ st.markdown("""
         border-style: solid; border-color: #0B0E11; border-width: 25px 4px; background-clip: padding-box;
     }
     ::-webkit-scrollbar-thumb:hover { background-color: #F39C12; }
+    
     .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px 15px 5px 15px; margin-top: 5px; margin-bottom: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .pos-long { border-left-color: #00FF00; }
     .pos-short { border-left-color: #FF0000; }
+    
+    .history-box { background-color: #14181C; border: 1px solid #2B3139; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 12px; }
+    .hist-row { display: flex; justify-content: space-between; border-bottom: 1px solid #1E2329; padding: 5px 0; }
+    .hist-row:last-child { border-bottom: none; }
+    
     .feature-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 10px;}
     .feature-title { color: #848E9C; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .feature-val { font-size: 18px; font-weight: bold; margin-top: 8px; }
@@ -44,7 +50,7 @@ selected_tf = "15m"
 FEE_RATE = 0.002 # CoinDCX Pro Fee
 VIRTUAL_LEVERAGE = 10 
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
-DATA_FILE = "bgstar_trading_data.json" # এই ফাইলে সব ডাটা সেভ থাকবে
+DATA_FILE = "bgstar_trading_data.json" 
 
 # ================= 💾 SMART MEMORY SAVER FUNCTIONS =================
 def load_saved_data():
@@ -60,7 +66,10 @@ def save_trading_data():
         'total_balance_inr': st.session_state.total_balance_inr,
         'available_balance_inr': st.session_state.available_balance_inr,
         'total_fees_paid': st.session_state.total_fees_paid,
-        'bot_positions': st.session_state.bot_positions
+        'bot_positions': st.session_state.bot_positions,
+        'trade_history': st.session_state.trade_history,
+        'cooldowns': st.session_state.cooldowns,
+        'auto_trade_active': st.session_state.auto_trade_active # মেইন সুইচের মেমোরি লক
     }
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
@@ -72,15 +81,21 @@ if 'app_start_time' not in st.session_state:
     
     saved_data = load_saved_data()
     if saved_data:
-        st.session_state.total_balance_inr = saved_data['total_balance_inr']
-        st.session_state.available_balance_inr = saved_data['available_balance_inr']
-        st.session_state.total_fees_paid = saved_data['total_fees_paid']
-        st.session_state.bot_positions = saved_data['bot_positions']
+        st.session_state.total_balance_inr = saved_data.get('total_balance_inr', 10000.0)
+        st.session_state.available_balance_inr = saved_data.get('available_balance_inr', 10000.0)
+        st.session_state.total_fees_paid = saved_data.get('total_fees_paid', 0.0)
+        st.session_state.bot_positions = saved_data.get('bot_positions', {})
+        st.session_state.trade_history = saved_data.get('trade_history', [])
+        st.session_state.cooldowns = saved_data.get('cooldowns', {})
+        st.session_state.auto_trade_active = saved_data.get('auto_trade_active', True)
     else:
         st.session_state.total_balance_inr = 10000.0
         st.session_state.available_balance_inr = 10000.0
         st.session_state.total_fees_paid = 0.0
         st.session_state.bot_positions = {}
+        st.session_state.trade_history = []
+        st.session_state.cooldowns = {}
+        st.session_state.auto_trade_active = True
         save_trading_data()
 
 def fetch_coin_radar(coin):
@@ -137,7 +152,7 @@ def fetch_coin_radar(coin):
             if ai_score >= 80: alloc_pct = 7.0
             else: alloc_pct = 3.0
             
-        elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35 and not macd_bullish:
+        elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high charges and rsi > 35 and not macd_bullish:
             ai_score = min(50 + 20 + (15 if rsi > 55 else 0), 100)
             signal_text, is_signal_active, signal_dir = f"🧨 SNIPER SELL", True, "SHORT"
             if ai_score >= 80: alloc_pct = 7.0
@@ -154,25 +169,32 @@ def fetch_coin_radar(coin):
 
 radars = {c.split("/")[0]: fetch_coin_radar(c) for c in SCALPING_COINS}
 
-# ================= 🤖 AUTO PAPER-TRADING ENGINE (WITH AUTO-SAVE) =================
+# ================= 🤖 AUTO PAPER-TRADING ENGINE =================
 time_since_app_opened = time.time() - st.session_state.app_start_time
 bot_is_warmed_up = time_since_app_opened > 15 
-data_changed = False # ডাটা সেভ করার ট্র্যাকার
+data_changed = False 
+
+current_time = time.time()
+keys_to_del = [k for k, v in st.session_state.cooldowns.items() if current_time > v]
+for k in keys_to_del: del st.session_state.cooldowns[k]
 
 for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # Check for closures
+    # 1. Auto TP/SL Closures (সুইচ অফ থাকলেও ক্লোজ হবে প্রটেকশনের জন্য)
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade = False
+        reason = ""
         if pos['dir'] == "LONG":
             pnl_pct = ((current_price - pos['entry']) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price >= pos['tp'] or current_price <= pos['sl']: close_trade = True
+            if current_price >= pos['tp']: close_trade, reason = True, "🎯 Auto TP"
+            elif current_price <= pos['sl']: close_trade, reason = True, "🛑 Auto SL"
         else:
             pnl_pct = ((pos['entry'] - current_price) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price <= pos['tp'] or current_price >= pos['sl']: close_trade = True
+            if current_price <= pos['tp']: close_trade, reason = True, "🎯 Auto TP"
+            elif current_price >= pos['sl']: close_trade, reason = True, "🛑 Auto SL"
             
         pos['live_pnl'] = pos['invested_inr'] * pnl_pct
             
@@ -181,34 +203,37 @@ for symbol, data in radars.items():
             net_pnl_inr = pos['live_pnl'] - fee_inr
             st.session_state.total_fees_paid += fee_inr
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
+            st.session_state.trade_history.insert(0, {'time': datetime.now().strftime("%H:%M"), 'coin': symbol, 'dir': pos['dir'], 'pnl': net_pnl_inr, 'reason': reason})
+            st.session_state.cooldowns[symbol] = time.time() + 300
             del st.session_state.bot_positions[symbol]
             data_changed = True
 
-    # Check for new entries
-    if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
-        invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
-        if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
-            st.session_state.available_balance_inr -= invest_amount
-            atr_buffer = data['atr'] * 1.5 
-            if data['dir'] == "LONG":
-                sl = data['sup'] - atr_buffer
-                tp = current_price + ((current_price - sl) * 1.5) 
-            else:
-                sl = data['res'] + atr_buffer
-                tp = current_price - ((sl - current_price) * 1.5)
-            
-            st.session_state.bot_positions[symbol] = {
-                'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
-                'tp': tp, 'sl': sl, 'live_pnl': 0.0
-            }
-            st.toast(f"⚡ Sniper Auto-Trade: {symbol}", icon="🚀")
-            data_changed = True
+    # 2. New Entries (ONLY IF SWITCH IS ON 🟢)
+    if st.session_state.auto_trade_active:
+        if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
+            if symbol not in st.session_state.cooldowns:
+                invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
+                if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
+                    st.session_state.available_balance_inr -= invest_amount
+                    atr_buffer = data['atr'] * 1.5 
+                    if data['dir'] == "LONG":
+                        sl = data['sup'] - atr_buffer
+                        tp = current_price + ((current_price - sl) * 1.5) 
+                    else:
+                        sl = data['res'] + atr_buffer
+                        tp = current_price - ((sl - current_price) * 1.5)
+                    
+                    st.session_state.bot_positions[symbol] = {
+                        'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
+                        'tp': tp, 'sl': sl, 'live_pnl': 0.0
+                    }
+                    st.toast(f"⚡ Sniper Auto-Trade: {symbol}", icon="🚀")
+                    data_changed = True
 
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
 
-if data_changed:
-    save_trading_data() # বট নিজে ট্রেড নিলে সেভ হবে
+if data_changed: save_trading_data()
 
 # ================= 💼 TOP: MASTER PAPER TRADING BOX =================
 tot_color = "#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF1744"
@@ -237,10 +262,20 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# ⏸️ PAUSE SWITCH FOR EDITING SL
-pause_radar = False
-if st.session_state.bot_positions:
-    pause_radar = st.checkbox("⏸️ PAUSE RADAR (Edit SL বা Trade Close করার জন্য এটি অন করুন)", value=False)
+# 🎛️ CONTROL PANEL ROW: SWITCHES
+switch_col1, switch_col2 = st.columns(2)
+with switch_col1:
+    # 🤖 ENGINE ON/OFF TOGGLE SWITCH
+    bot_switch = st.toggle("🤖 AUTO-TRADING ENGINE ACTIVE", value=st.session_state.auto_trade_active)
+    if bot_switch != st.session_state.auto_trade_active:
+        st.session_state.auto_trade_active = bot_switch
+        save_trading_data()
+        st.rerun()
+
+with switch_col2:
+    pause_radar = False
+    if st.session_state.bot_positions:
+        pause_radar = st.checkbox("⏸️ PAUSE RADAR (Edit SL/Close)", value=False)
 
 # 🟢 LIVE POSITIONS & MANUAL CONTROLS
 if st.session_state.bot_positions:
@@ -251,8 +286,13 @@ if st.session_state.bot_positions:
         st.markdown(f"""
             <div class="pos-card {card_class}">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <div><span style="font-size:18px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:11px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']}</span></div>
-                    <div style="font-size:18px; font-weight:bold; color:{'#00FF00' if p['live_pnl'] >= 0 else '#FF0000'};">₹{p['live_pnl']:,.2f}</div>
+                    <div>
+                        <div><span style="font-size:18px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:11px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']}</span></div>
+                        <div style="font-size:11px; color:#848E9C; margin-top:2px;">💰 Margin Used: ₹{p['invested_inr']:,.2f}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:18px; font-weight:bold; color:{'#00FF00' if p['live_pnl'] >= 0 else '#FF0000'};">₹{p['live_pnl']:,.2f}</div>
+                    </div>
                 </div>
         """, unsafe_allow_html=True)
         
@@ -263,20 +303,40 @@ if st.session_state.bot_positions:
                 net_pnl = p['live_pnl'] - fee_inr
                 st.session_state.total_fees_paid += fee_inr
                 st.session_state.available_balance_inr += p['invested_inr'] + net_pnl
+                
+                st.session_state.trade_history.insert(0, {'time': datetime.now().strftime("%H:%M"), 'coin': c, 'dir': p['dir'], 'pnl': net_pnl, 'reason': '👤 Manual Close'})
+                st.session_state.cooldowns[c] = time.time() + 300
+                
                 del st.session_state.bot_positions[c]
-                save_trading_data() # ম্যানুয়াল ক্লোজে সেভ
-                st.toast(f"✅ {c} Closed! Profit: ₹{net_pnl:.2f}", icon="💰")
+                save_trading_data() 
+                st.toast(f"✅ {c} Closed! Sent to History.", icon="💰")
                 st.rerun()
         with col2:
             new_sl = st.number_input("New SL", value=float(p['sl']), format="%.4f", step=0.0001, key=f"sl_in_{c}", label_visibility="collapsed")
         with col3:
             if st.button("🔄 Set SL", key=f"upd_sl_{c}"):
                 st.session_state.bot_positions[c]['sl'] = new_sl
-                save_trading_data() # ম্যানুয়াল SL পালটালে সেভ
+                save_trading_data() 
                 st.toast(f"🎯 Stop-Loss Updated for {c}", icon="✅")
                 st.rerun()
                 
         st.markdown("</div>", unsafe_allow_html=True)
+
+# 📜 TRADE HISTORY SECTION
+if st.session_state.trade_history:
+    with st.expander("📜 TRADE HISTORY (Last 10 Trades)", expanded=False):
+        st.markdown('<div class="history-box">', unsafe_allow_html=True)
+        for t in st.session_state.trade_history[:10]: 
+            p_color = "#00FF00" if t['pnl'] >= 0 else "#FF1744"
+            st.markdown(f"""
+                <div class="hist-row">
+                    <span style="color:#848E9C;">{t['time']}</span>
+                    <span><b>{t['coin']}</b> ({t['dir']})</span>
+                    <span style="color:#848E9C; font-size:10px;">{t['reason']}</span>
+                    <span style="color:{p_color}; font-weight:bold;">₹{t['pnl']:.2f}</span>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ================= 🧭 MIDDLE: MARKET ANALYSIS =================
 active_symbol = st.session_state.active_coin.split("/")[0]
@@ -353,4 +413,3 @@ if st.button("🔄 Reset Demo Account (Delete Data)"):
 if not pause_radar:
     time.sleep(7)
     st.rerun()
-    
