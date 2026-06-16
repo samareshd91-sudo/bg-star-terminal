@@ -69,7 +69,7 @@ def save_trading_data():
         'bot_positions': st.session_state.bot_positions,
         'trade_history': st.session_state.trade_history,
         'cooldowns': st.session_state.cooldowns,
-        'auto_trade_active': st.session_state.auto_trade_active # মেইন সুইচের মেমোরি লক
+        'auto_trade_active': st.session_state.auto_trade_active
     }
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
@@ -152,7 +152,8 @@ def fetch_coin_radar(coin):
             if ai_score >= 80: alloc_pct = 7.0
             else: alloc_pct = 3.0
             
-        elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high charges and rsi > 35 and not macd_bullish:
+        # 🛠️ এই লাইনটিতেই ভুল ছিল, "charges" শব্দটা মুছে ঠিক করে দেওয়া হয়েছে!
+        elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35 and not macd_bullish:
             ai_score = min(50 + 20 + (15 if rsi > 55 else 0), 100)
             signal_text, is_signal_active, signal_dir = f"🧨 SNIPER SELL", True, "SHORT"
             if ai_score >= 80: alloc_pct = 7.0
@@ -182,7 +183,7 @@ for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # 1. Auto TP/SL Closures (সুইচ অফ থাকলেও ক্লোজ হবে প্রটেকশনের জন্য)
+    # Auto TP/SL Closures
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade = False
@@ -208,7 +209,7 @@ for symbol, data in radars.items():
             del st.session_state.bot_positions[symbol]
             data_changed = True
 
-    # 2. New Entries (ONLY IF SWITCH IS ON 🟢)
+    # New Entries 
     if st.session_state.auto_trade_active:
         if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
             if symbol not in st.session_state.cooldowns:
@@ -265,7 +266,6 @@ st.markdown(f"""
 # 🎛️ CONTROL PANEL ROW: SWITCHES
 switch_col1, switch_col2 = st.columns(2)
 with switch_col1:
-    # 🤖 ENGINE ON/OFF TOGGLE SWITCH
     bot_switch = st.toggle("🤖 AUTO-TRADING ENGINE ACTIVE", value=st.session_state.auto_trade_active)
     if bot_switch != st.session_state.auto_trade_active:
         st.session_state.auto_trade_active = bot_switch
