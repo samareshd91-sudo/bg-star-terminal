@@ -3,6 +3,8 @@ import ccxt
 import pandas as pd
 import plotly.graph_objects as go
 import time 
+import json
+import os
 from datetime import datetime
 
 # 👑 Premium Layout Config
@@ -11,43 +13,26 @@ st.set_page_config(page_title="BG STAR MASTER TERMINAL", layout="wide", initial_
 # 🌟 Ultra-Premium CSS (Zero Top Margin & Header Hidden)
 st.markdown("""
     <style>
-    /* ডিফল্ট হেডার এবং ফালতু লাইন পুরোপুরি গায়েব করার লক */
-    [data-testid="stHeader"], header, #MainMenu, footer { 
-        display: none !important; 
-        visibility: hidden !important; 
-    }
-    
+    [data-testid="stHeader"], header, #MainMenu, footer { display: none !important; visibility: hidden !important; }
     html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
         background-color: #0B0E11 !important; color: #EAECEF !important; 
         overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
         touch-action: pan-y !important; 
     }
-    
-    .block-container {
-        padding-top: 15px !important; 
-        padding-right: 15px !important;
-        padding-left: 10px !important;
-    }
-    
-    /* 📱 কাস্টম প্রো স্ক্রলবার */
+    .block-container { padding-top: 15px !important; padding-right: 15px !important; padding-left: 10px !important; }
     ::-webkit-scrollbar { width: 16px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { 
         background-color: #FCD535; border-radius: 12px; 
-        border-style: solid; border-color: #0B0E11; border-width: 25px 4px; 
-        background-clip: padding-box;
+        border-style: solid; border-color: #0B0E11; border-width: 25px 4px; background-clip: padding-box;
     }
     ::-webkit-scrollbar-thumb:hover { background-color: #F39C12; }
-
-    /* Cards & Buttons */
     .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px 15px 5px 15px; margin-top: 5px; margin-bottom: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .pos-long { border-left-color: #00FF00; }
     .pos-short { border-left-color: #FF0000; }
-    
     .feature-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 10px;}
     .feature-title { color: #848E9C; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .feature-val { font-size: 18px; font-weight: bold; margin-top: 8px; }
-    
     div.stButton > button { border-radius: 8px !important; font-weight: bold !important; width: 100% !important; margin-bottom: 2px; background-color: #181A20 !important; color: #EAECEF !important; border: 1px solid #2B3139 !important;}
     div.stButton > button:hover { border-color: #FCD535 !important; background-color: #2B3139 !important;}
     hr { border-color: #2B3139; margin: 15px 0; }
@@ -56,18 +41,47 @@ st.markdown("""
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "15m" 
-FEE_RATE = 0.002 # 🪙 CoinDCX Pro Standard Fee (0.2%) Update করা হলো
+FEE_RATE = 0.002 # CoinDCX Pro Fee
 VIRTUAL_LEVERAGE = 10 
-
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
+DATA_FILE = "bgstar_trading_data.json" # এই ফাইলে সব ডাটা সেভ থাকবে
 
-# ================= 🧠 Bot Memory & Paper Trade Setup =================
-if 'app_start_time' not in st.session_state: st.session_state.app_start_time = time.time() 
-if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
-if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_inr = 10000.0
-if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 10000.0
-if 'total_fees_paid' not in st.session_state: st.session_state.total_fees_paid = 0.0 
-if 'bot_positions' not in st.session_state: st.session_state.bot_positions = {} 
+# ================= 💾 SMART MEMORY SAVER FUNCTIONS =================
+def load_saved_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except: return None
+    return None
+
+def save_trading_data():
+    data = {
+        'total_balance_inr': st.session_state.total_balance_inr,
+        'available_balance_inr': st.session_state.available_balance_inr,
+        'total_fees_paid': st.session_state.total_fees_paid,
+        'bot_positions': st.session_state.bot_positions
+    }
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+# ================= 🧠 Bot Memory Setup =================
+if 'app_start_time' not in st.session_state: 
+    st.session_state.app_start_time = time.time()
+    st.session_state.active_coin = "BTC/USDT"
+    
+    saved_data = load_saved_data()
+    if saved_data:
+        st.session_state.total_balance_inr = saved_data['total_balance_inr']
+        st.session_state.available_balance_inr = saved_data['available_balance_inr']
+        st.session_state.total_fees_paid = saved_data['total_fees_paid']
+        st.session_state.bot_positions = saved_data['bot_positions']
+    else:
+        st.session_state.total_balance_inr = 10000.0
+        st.session_state.available_balance_inr = 10000.0
+        st.session_state.total_fees_paid = 0.0
+        st.session_state.bot_positions = {}
+        save_trading_data()
 
 def fetch_coin_radar(coin):
     try:
@@ -93,34 +107,15 @@ def fetch_coin_radar(coin):
         df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
         
         vol_sma = df['volume'].rolling(20).mean().iloc[-1]
-        curr_vol = df['volume'].iloc[-1]
-        curr_price = df['close'].iloc[-1]
+        curr_vol, curr_price = df['volume'].iloc[-1], df['close'].iloc[-1]
         
-        local_support = df['low'].tail(15).min()
-        local_resistance = df['high'].tail(15).max()
+        local_support, local_resistance = df['low'].tail(15).min(), df['high'].tail(15).max()
         
-        curr_O, curr_C, curr_H, curr_L = df['open'].iloc[-1], df['close'].iloc[-1], df['high'].iloc[-1], df['low'].iloc[-1]
-        prev_O, prev_C = df['open'].iloc[-2], df['close'].iloc[-2]
-        curr_body = abs(curr_C - curr_O)
-        prev_body = abs(prev_C - prev_O)
-        curr_upper_shadow = curr_H - max(curr_C, curr_O)
-        curr_lower_shadow = min(curr_C, curr_O) - curr_L
-        
-        pattern_score = 5 
-        if curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body: pattern_score = 15 
-        elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 
-        elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 
-        elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 
-
         price_spread = (local_resistance - local_support) / curr_price
-        if price_spread < 0.0075:
-            market_state, state_color = "↔️ SIDEWAYS", "#FCD535"
-        elif curr_price > df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]:
-            market_state, state_color = "📈 UP TREND", "#00FF00"
-        elif curr_price < df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] < df['ema_20'].iloc[-1]:
-            market_state, state_color = "📉 DOWN TREND", "#FF1744"
-        else:
-            market_state, state_color = "🔄 CHOPPY", "#848E9C"
+        if price_spread < 0.0075: market_state, state_color = "↔️ SIDEWAYS", "#FCD535"
+        elif curr_price > df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]: market_state, state_color = "📈 UP TREND", "#00FF00"
+        elif curr_price < df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] < df['ema_20'].iloc[-1]: market_state, state_color = "📉 DOWN TREND", "#FF1744"
+        else: market_state, state_color = "🔄 CHOPPY", "#848E9C"
             
         activity = "🟢 BUYERS 🔥" if rsi > 55 else ("🔴 SELLERS 🩸" if rsi < 45 else "⚖️ EQUAL")
         act_color = "#00FF00" if rsi > 55 else ("#FF1744" if rsi < 45 else "#848E9C")
@@ -134,22 +129,19 @@ def fetch_coin_radar(coin):
         is_volume_high = curr_vol > vol_sma  
         macd_bullish = df['macd'].iloc[-1] > df['macd_signal'].iloc[-1]
         
-        signal_text, is_signal_active, signal_dir = "🎯 SCANNING...", False, "NONE"
-        ai_score, alloc_pct = 0, 0.0
+        signal_text, is_signal_active, signal_dir, alloc_pct = "🎯 SCANNING...", False, "NONE", 0.0
         
         if trend_50 == "BULLISH" and ema_bullish and is_volume_high and rsi < 65 and macd_bullish:
-            ai_score = min(50 + pattern_score + (15 if rsi < 45 else 0), 100)
+            ai_score = min(50 + 20 + (15 if rsi < 45 else 0), 100)
             signal_text, is_signal_active, signal_dir = f"🚀 SNIPER BUY", True, "LONG"
+            if ai_score >= 80: alloc_pct = 7.0
+            else: alloc_pct = 3.0
             
         elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35 and not macd_bullish:
-            ai_score = min(50 + pattern_score + (15 if rsi > 55 else 0), 100)
+            ai_score = min(50 + 20 + (15 if rsi > 55 else 0), 100)
             signal_text, is_signal_active, signal_dir = f"🧨 SNIPER SELL", True, "SHORT"
-            
-        if ai_score >= 90: alloc_pct = 10.0
-        elif ai_score >= 80: alloc_pct = 7.0
-        elif ai_score >= 70: alloc_pct = 5.0
-        elif ai_score >= 60: alloc_pct = 3.0
-        elif ai_score > 0: alloc_pct = 1.0
+            if ai_score >= 80: alloc_pct = 7.0
+            else: alloc_pct = 3.0
                 
         return {
             'price': curr_price, 'signal': signal_text, 'dir': signal_dir,
@@ -162,14 +154,16 @@ def fetch_coin_radar(coin):
 
 radars = {c.split("/")[0]: fetch_coin_radar(c) for c in SCALPING_COINS}
 
-# ================= 🤖 AUTO PAPER-TRADING ENGINE =================
+# ================= 🤖 AUTO PAPER-TRADING ENGINE (WITH AUTO-SAVE) =================
 time_since_app_opened = time.time() - st.session_state.app_start_time
 bot_is_warmed_up = time_since_app_opened > 15 
+data_changed = False # ডাটা সেভ করার ট্র্যাকার
 
 for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
+    # Check for closures
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade = False
@@ -188,7 +182,9 @@ for symbol, data in radars.items():
             st.session_state.total_fees_paid += fee_inr
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
             del st.session_state.bot_positions[symbol]
+            data_changed = True
 
+    # Check for new entries
     if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
         invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
         if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
@@ -206,9 +202,13 @@ for symbol, data in radars.items():
                 'tp': tp, 'sl': sl, 'live_pnl': 0.0
             }
             st.toast(f"⚡ Sniper Auto-Trade: {symbol}", icon="🚀")
+            data_changed = True
 
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
+
+if data_changed:
+    save_trading_data() # বট নিজে ট্রেড নিলে সেভ হবে
 
 # ================= 💼 TOP: MASTER PAPER TRADING BOX =================
 tot_color = "#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF1744"
@@ -256,7 +256,6 @@ if st.session_state.bot_positions:
                 </div>
         """, unsafe_allow_html=True)
         
-        # 🎛️ Control Buttons Box
         col1, col2, col3 = st.columns([1.5, 1.5, 1])
         with col1:
             if st.button(f"💰 Close (Take ₹{p['live_pnl']:.2f})", key=f"close_{c}"):
@@ -265,6 +264,7 @@ if st.session_state.bot_positions:
                 st.session_state.total_fees_paid += fee_inr
                 st.session_state.available_balance_inr += p['invested_inr'] + net_pnl
                 del st.session_state.bot_positions[c]
+                save_trading_data() # ম্যানুয়াল ক্লোজে সেভ
                 st.toast(f"✅ {c} Closed! Profit: ₹{net_pnl:.2f}", icon="💰")
                 st.rerun()
         with col2:
@@ -272,6 +272,7 @@ if st.session_state.bot_positions:
         with col3:
             if st.button("🔄 Set SL", key=f"upd_sl_{c}"):
                 st.session_state.bot_positions[c]['sl'] = new_sl
+                save_trading_data() # ম্যানুয়াল SL পালটালে সেভ
                 st.toast(f"🎯 Stop-Loss Updated for {c}", icon="✅")
                 st.rerun()
                 
@@ -338,7 +339,18 @@ for i, col_box in enumerate(row1 + row2):
                 st.session_state.active_coin = f"{c_sym}/USDT"
                 st.rerun()
 
-# ⏱️ 7s BACKGROUND AUTO-REFRESH (Pause থাকলে স্কিপ হবে)
+# 🗑️ RESET DATA BUTTON
+st.markdown("<br>", unsafe_allow_html=True)
+if st.button("🔄 Reset Demo Account (Delete Data)"):
+    if os.path.exists(DATA_FILE):
+        os.remove(DATA_FILE)
+    st.session_state.clear()
+    st.toast("✅ Account Reset to ₹10,000!", icon="🔄")
+    time.sleep(1)
+    st.rerun()
+
+# ⏱️ 7s BACKGROUND AUTO-REFRESH
 if not pause_radar:
     time.sleep(7)
     st.rerun()
+    
