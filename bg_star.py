@@ -8,10 +8,19 @@ from datetime import datetime
 # 👑 Premium Layout Config
 st.set_page_config(page_title="BG STAR HYBRID BOT", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Ultra-Premium CSS
+# 🌟 Ultra-Premium CSS (Mobile Optimized & Custom Scrollbar)
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] { background-color: #0B0E11 !important; color: #EAECEF !important; overscroll-behavior: none !important; }
+    html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
+        background-color: #0B0E11 !important; color: #EAECEF !important; 
+        overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
+        touch-action: pan-y !important; 
+    }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: #0B0E11; border-left: 1px solid #1E2329; }
+    ::-webkit-scrollbar-thumb { background: #FCD535; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #F39C12; }
+
     .brand-title { font-size: 32px; font-weight: 900; background: -webkit-linear-gradient(45deg, #00BFFF, #00FF88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0px; }
     .sub-title { text-align: center; color: #848E9C; font-size: 13px; margin-bottom: 15px; text-transform: uppercase; }
     .wallet-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; }
@@ -31,7 +40,8 @@ VIRTUAL_LEVERAGE = 10
 
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
 
-# ================= 🧠 Bot Memory Setup (10,000 INR) =================
+# ================= 🧠 Bot Memory Setup =================
+if 'app_start_time' not in st.session_state: st.session_state.app_start_time = time.time() # ⏱️ অ্যাপ খোলার সময় রেকর্ড
 if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
 if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_inr = 10000.0
 if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 10000.0
@@ -40,7 +50,7 @@ if 'bot_positions' not in st.session_state: st.session_state.bot_positions = {}
 if 'bot_history' not in st.session_state: st.session_state.bot_history = [] 
 
 st.markdown('<div class="brand-title">BG STAR PRO HYBRID-SCALPER</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">🧠 SMART AI CONFIDENCE SIZING | 10,000 INR VIRTUAL PORTFOLIO</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">🛡️ SMART INITIAL WARM-UP | ⚡ INSTANT SNIPER ENTRY</div>', unsafe_allow_html=True)
 
 col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
 with col_toggle2:
@@ -51,12 +61,10 @@ def fetch_coin_radar(coin):
         bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # ATR Calculation
         df['prev_close'] = df['close'].shift(1)
         df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
         df['atr'] = df['tr'].rolling(14).mean()
         
-        # Indicators
         df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
         df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
@@ -71,7 +79,6 @@ def fetch_coin_radar(coin):
         rsi = 100 - (100 / (1 + (gain / loss).iloc[-1]))
         vol_sma = df['volume'].rolling(20).mean().iloc[-1]
         
-        # Current States
         curr_price = df['close'].iloc[-1]
         trend_50 = "BULLISH" if curr_price > df['ema_50'].iloc[-1] else "BEARISH"
         ema_bullish = df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]
@@ -81,7 +88,6 @@ def fetch_coin_radar(coin):
         local_support = df['low'].tail(15).min()
         local_resistance = df['high'].tail(15).max()
         
-        # 🕯️ AI Candlestick Scoring
         curr_O, curr_C, curr_H, curr_L = df['open'].iloc[-1], df['close'].iloc[-1], df['high'].iloc[-1], df['low'].iloc[-1]
         prev_O, prev_C = df['open'].iloc[-2], df['close'].iloc[-2]
         curr_body = abs(curr_C - curr_O)
@@ -89,36 +95,30 @@ def fetch_coin_radar(coin):
         curr_upper_shadow = curr_H - max(curr_C, curr_O)
         curr_lower_shadow = min(curr_C, curr_O) - curr_L
         
-        pattern_score = 5 # Default
-        if curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body: pattern_score = 15 # Hammer
-        elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 # Shooting Star
-        elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 # Bullish Engulfing
-        elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 # Bearish Engulfing
+        pattern_score = 5 
+        if curr_lower_shadow >= 2 * curr_body and curr_upper_shadow <= 0.2 * curr_body: pattern_score = 15 
+        elif curr_upper_shadow >= 2 * curr_body and curr_lower_shadow <= 0.2 * curr_body: pattern_score = 15 
+        elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 
+        elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 
 
-        # 🧠 AI CONFIDENCE SCORING ENGINE
         signal_text, css_class, is_signal_active, signal_dir = "WAITING...", "wait-glow", False, "NONE"
         ai_score = 0
         alloc_pct = 0.0
         
         if trend_50 == "BULLISH" and ema_bullish and is_volume_high and rsi < 65:
-            ai_score = 50 # Base setup met
-            if macd_bullish: ai_score += 20 # Trend momentum matched
-            if rsi < 45: ai_score += 15 # Sweet spot (Oversold)
-            ai_score += pattern_score # Candlestick logic
+            ai_score = 50 + pattern_score
+            if macd_bullish: ai_score += 20 
+            if rsi < 45: ai_score += 15 
             ai_score = min(ai_score, 100)
-            
             signal_text, css_class, is_signal_active, signal_dir = f"🟢 BUY ({ai_score}/100)", "buy-glow", True, "LONG"
             
         elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35:
-            ai_score = 50 # Base setup met
-            if not macd_bullish: ai_score += 20 # Trend momentum matched
-            if rsi > 55: ai_score += 15 # Sweet spot (Overbought)
-            ai_score += pattern_score # Candlestick logic
+            ai_score = 50 + pattern_score
+            if not macd_bullish: ai_score += 20 
+            if rsi > 55: ai_score += 15 
             ai_score = min(ai_score, 100)
-            
             signal_text, css_class, is_signal_active, signal_dir = f"🔴 SELL ({ai_score}/100)", "sell-glow", True, "SHORT"
             
-        # Dynamic Fund Sizing based on Score
         if ai_score >= 90: alloc_pct = 10.0
         elif ai_score >= 80: alloc_pct = 7.0
         elif ai_score >= 70: alloc_pct = 5.0
@@ -135,11 +135,14 @@ def fetch_coin_radar(coin):
 radars = {c.split("/")[0]: fetch_coin_radar(c) for c in SCALPING_COINS}
 
 # ================= 🤖 TRADING ENGINE & LIVE PNL =================
+time_since_app_opened = time.time() - st.session_state.app_start_time
+bot_is_warmed_up = time_since_app_opened > 15 # ⏳ ১৫ সেকেন্ডের শিল্ড
+
 for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # 1. Manage Positions & Calculate PnL
+    # 1. Manage Active Positions
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade, reason = False, ""
@@ -160,29 +163,33 @@ for symbol, data in radars.items():
             net_pnl_inr = pos['live_pnl'] - fee_inr
             st.session_state.total_fees_paid += fee_inr
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
-            
             st.session_state.bot_history.insert(0, {'time': datetime.now().strftime("%H:%M:%S"), 'coin': symbol, 'dir': pos['dir'], 'entry': pos['entry'], 'exit': current_price, 'reason': reason, 'pnl': net_pnl_inr, 'fee': fee_inr})
             del st.session_state.bot_positions[symbol]
 
-    # 2. 🧠 Smart Auto Entries (Dynamic Size)
+    # 2. ⚡ INSTANT SNIPER ENTRY (WITH 15s WARM-UP SHIELD)
     if symbol not in st.session_state.bot_positions and data['is_signal_active']:
-        # AI Sizing Logic here!
-        invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
         
-        if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
-            st.session_state.available_balance_inr -= invest_amount
-            atr_buffer = data['atr'] * 1.5 
-            if data['dir'] == "LONG":
-                sl = data['sup'] - atr_buffer
-                tp = current_price + ((current_price - sl) * 1.5) 
-            else:
-                sl = data['res'] + atr_buffer
-                tp = current_price - ((sl - current_price) * 1.5)
-            st.session_state.bot_positions[symbol] = {
-                'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
-                'tp': tp, 'sl': sl, 'live_pnl': 0.0, 'score': data['ai_score'], 'pct': data['alloc_pct']
-            }
-            st.toast(f"AI Entry: {symbol} | Confidence {data['ai_score']} | Used {data['alloc_pct']}% Fund", icon="🧠")
+        if not bot_is_warmed_up:
+            # অ্যাপ খোলার প্রথম ১৫ সেকেন্ড কোনো ট্রেড নেবে না, শুধু দেখবে
+            st.toast(f"🛡️ App Initializing... Scanning {symbol} without trading.", icon="🔍")
+        else:
+            # ১৫ সেকেন্ড পার হয়ে গেলে, ইনস্ট্যান্ট কিনে নেবে!
+            invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
+            if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
+                st.session_state.available_balance_inr -= invest_amount
+                atr_buffer = data['atr'] * 1.5 
+                if data['dir'] == "LONG":
+                    sl = data['sup'] - atr_buffer
+                    tp = current_price + ((current_price - sl) * 1.5) 
+                else:
+                    sl = data['res'] + atr_buffer
+                    tp = current_price - ((sl - current_price) * 1.5)
+                
+                st.session_state.bot_positions[symbol] = {
+                    'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
+                    'tp': tp, 'sl': sl, 'live_pnl': 0.0, 'score': data['ai_score'], 'pct': data['alloc_pct']
+                }
+                st.toast(f"⚡ Instant Sniper Entry: {symbol} | Confidence {data['ai_score']}", icon="🚀")
 
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 unrealized_pnl = sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
@@ -281,4 +288,5 @@ if active_data:
                 if c_name not in st.session_state.bot_positions:
                     st.session_state.bot_positions[c_name] = {'dir': "SHORT", 'entry': active_data['price'], 'invested_inr': st.session_state.total_balance_inr * 0.05, 'tp': active_data['price']*0.98, 'sl': active_data['price']*1.01, 'live_pnl': 0.0}; st.rerun()
 
-if auto_refresh: time.sleep(15); st.rerun()
+# ৭ সেকেন্ডের ইনস্ট্যান্ট রিফ্রেশ
+if auto_refresh: time.sleep(7); st.rerun()
