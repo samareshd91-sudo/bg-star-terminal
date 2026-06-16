@@ -8,7 +8,7 @@ from datetime import datetime
 # 👑 Premium Layout Config
 st.set_page_config(page_title="BG STAR HYBRID BOT", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Ultra-Premium CSS (Mobile Optimized & Custom Scrollbar)
+# 🌟 Ultra-Premium CSS (Mobile Optimized & Chunky Scrollbar)
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
@@ -16,10 +16,23 @@ st.markdown("""
         overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
         touch-action: pan-y !important; 
     }
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-track { background: #0B0E11; border-left: 1px solid #1E2329; }
-    ::-webkit-scrollbar-thumb { background: #FCD535; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #F39C12; }
+    
+    /* 📱 কাস্টম প্রো স্ক্রলবার (মোবাইলের জন্য মোটা ও ক্যাপসুল সাইজ) */
+    ::-webkit-scrollbar { 
+        width: 18px; /* আগের চেয়ে অনেক মোটা করা হলো */
+    }
+    ::-webkit-scrollbar-track { 
+        background: #0B0E11; 
+    }
+    ::-webkit-scrollbar-thumb { 
+        background-color: #FCD535; 
+        border-radius: 20px; 
+        border: 5px solid #0B0E11; /* এই বর্ডারের কারণে স্ক্রলবারটা দেখতে ছোট ও ভাসমান ক্যাপসুলের মতো লাগবে */
+        background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { 
+        background-color: #F39C12; 
+    }
 
     .brand-title { font-size: 32px; font-weight: 900; background: -webkit-linear-gradient(45deg, #00BFFF, #00FF88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0px; }
     .sub-title { text-align: center; color: #848E9C; font-size: 13px; margin-bottom: 15px; text-transform: uppercase; }
@@ -41,7 +54,7 @@ VIRTUAL_LEVERAGE = 10
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
 
 # ================= 🧠 Bot Memory Setup =================
-if 'app_start_time' not in st.session_state: st.session_state.app_start_time = time.time() # ⏱️ অ্যাপ খোলার সময় রেকর্ড
+if 'app_start_time' not in st.session_state: st.session_state.app_start_time = time.time() # ⏱️ অ্যাপ খোলার সময়
 if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
 if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_inr = 10000.0
 if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 10000.0
@@ -136,7 +149,7 @@ radars = {c.split("/")[0]: fetch_coin_radar(c) for c in SCALPING_COINS}
 
 # ================= 🤖 TRADING ENGINE & LIVE PNL =================
 time_since_app_opened = time.time() - st.session_state.app_start_time
-bot_is_warmed_up = time_since_app_opened > 15 # ⏳ ১৫ সেকেন্ডের শিল্ড
+bot_is_warmed_up = time_since_app_opened > 15 # ⏳ ১৫ সেকেন্ডের অ্যাপ ওয়ার্ম-আপ শিল্ড
 
 for symbol, data in radars.items():
     if not data: continue
@@ -168,12 +181,9 @@ for symbol, data in radars.items():
 
     # 2. ⚡ INSTANT SNIPER ENTRY (WITH 15s WARM-UP SHIELD)
     if symbol not in st.session_state.bot_positions and data['is_signal_active']:
-        
         if not bot_is_warmed_up:
-            # অ্যাপ খোলার প্রথম ১৫ সেকেন্ড কোনো ট্রেড নেবে না, শুধু দেখবে
             st.toast(f"🛡️ App Initializing... Scanning {symbol} without trading.", icon="🔍")
         else:
-            # ১৫ সেকেন্ড পার হয়ে গেলে, ইনস্ট্যান্ট কিনে নেবে!
             invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
             if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
                 st.session_state.available_balance_inr -= invest_amount
