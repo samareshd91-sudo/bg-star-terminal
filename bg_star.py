@@ -6,18 +6,19 @@ import time
 from datetime import datetime
 
 # 👑 Premium Layout Config
-st.set_page_config(page_title="BG STAR ULTIMATE HYBRID", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="BG STAR HYBRID BOT", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Ultra-Premium CSS (Chunky Scrollbar & Mobile Lock)
+# 🌟 Ultra-Premium CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
         background-color: #0B0E11 !important; color: #EAECEF !important; 
         overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
         touch-action: pan-y !important; 
+        padding-top: 1rem !important; /* ওপরের ফাঁকা জায়গা কমানো হলো */
     }
     
-    /* 📱 কাস্টম প্রো স্ক্রলবার (মোটা ক্যাপসুল সাইজ) */
+    /* 📱 কাস্টম প্রো স্ক্রলবার */
     ::-webkit-scrollbar { width: 36px; }
     ::-webkit-scrollbar-track { background: #0B0E11; }
     ::-webkit-scrollbar-thumb { 
@@ -27,9 +28,6 @@ st.markdown("""
     }
     ::-webkit-scrollbar-thumb:hover { background-color: #F39C12; }
 
-    /* Cards */
-    .wallet-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; }
-    .wallet-val { font-size: 22px; font-weight: bold; margin-top: 5px; }
     .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px; margin-top: 10px; margin-bottom: 5px; }
     .pos-long { border-left-color: #00FF00; }
     .pos-short { border-left-color: #FF0000; }
@@ -58,12 +56,6 @@ if 'total_balance_inr' not in st.session_state: st.session_state.total_balance_i
 if 'available_balance_inr' not in st.session_state: st.session_state.available_balance_inr = 10000.0
 if 'total_fees_paid' not in st.session_state: st.session_state.total_fees_paid = 0.0 
 if 'bot_positions' not in st.session_state: st.session_state.bot_positions = {} 
-if 'bot_history' not in st.session_state: st.session_state.bot_history = [] 
-
-# ================= 🎛️ TOP TOGGLE (টাইটেল মুছে শুধু টগল রাখা হলো) =================
-col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
-with col_toggle2:
-    auto_refresh = st.toggle("🟢 Auto-Refresh & AI Auto-Trade Active", value=True)
 
 def fetch_coin_radar(coin):
     try:
@@ -109,7 +101,7 @@ def fetch_coin_radar(coin):
         elif prev_C < prev_O and curr_C > curr_O and curr_body > prev_body: pattern_score = 20 
         elif prev_C > prev_O and curr_C < curr_O and curr_body > prev_body: pattern_score = 20 
 
-        # Market Analysis Data (For Cards)
+        # Market Analysis Data
         price_spread = (local_resistance - local_support) / curr_price
         if price_spread < 0.0075:
             market_state, state_color = "↔️ SIDEWAYS (Ranging)", "#FCD535"
@@ -127,13 +119,13 @@ def fetch_coin_radar(coin):
         vol_status = f"🔥 HIGH ({vol_ratio:.1f}%)" if curr_vol > vol_sma else f"❄️ LOW ({vol_ratio:.1f}%)"
         vol_color = "#00FF88" if curr_vol > vol_sma else "#848E9C"
 
-        # AI Confidence Sizing & Entry Logic
+        # AI Entry Logic
         trend_50 = "BULLISH" if curr_price > df['ema_50'].iloc[-1] else "BEARISH"
         ema_bullish = df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1]
         is_volume_high = curr_vol > vol_sma  
         macd_bullish = df['macd'].iloc[-1] > df['macd_signal'].iloc[-1]
         
-        signal_text, css_class, is_signal_active, signal_dir = "🎯 SCANNING...", "wait-glow", False, "NONE"
+        signal_text, is_signal_active, signal_dir = "🎯 SCANNING...", False, "NONE"
         ai_score = 0
         alloc_pct = 0.0
         
@@ -141,13 +133,13 @@ def fetch_coin_radar(coin):
             ai_score = 50 + pattern_score
             if rsi < 45: ai_score += 15 
             ai_score = min(ai_score, 100)
-            signal_text, css_class, is_signal_active, signal_dir = f"🚀 SNIPER BUY SETUP", "buy-glow", True, "LONG"
+            signal_text, is_signal_active, signal_dir = f"🚀 SNIPER BUY SETUP", True, "LONG"
             
         elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35 and not macd_bullish:
             ai_score = 50 + pattern_score
             if rsi > 55: ai_score += 15 
             ai_score = min(ai_score, 100)
-            signal_text, css_class, is_signal_active, signal_dir = f"🧨 SNIPER SELL SETUP", "sell-glow", True, "SHORT"
+            signal_text, is_signal_active, signal_dir = f"🧨 SNIPER SELL SETUP", True, "SHORT"
             
         if ai_score >= 90: alloc_pct = 10.0
         elif ai_score >= 80: alloc_pct = 7.0
@@ -156,7 +148,7 @@ def fetch_coin_radar(coin):
         elif ai_score > 0: alloc_pct = 1.0
                 
         return {
-            'price': curr_price, 'signal': signal_text, 'css': css_class, 'dir': signal_dir,
+            'price': curr_price, 'signal': signal_text, 'dir': signal_dir,
             'df': df, 'sup': local_support, 'res': local_resistance, 'atr': df['atr'].iloc[-1], 
             'is_signal_active': is_signal_active, 'ai_score': ai_score, 'alloc_pct': alloc_pct,
             'state': market_state, 'state_color': state_color, 'activity': activity, 'act_color': act_color,
@@ -174,19 +166,17 @@ for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # 1. Manage Active Positions
+    # Manage Active Positions
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
-        close_trade, reason = False, ""
+        close_trade = False
         
         if pos['dir'] == "LONG":
             pnl_pct = ((current_price - pos['entry']) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price >= pos['tp']: close_trade, reason = True, "🎯 Auto TP Hit"
-            elif current_price <= pos['sl']: close_trade, reason = True, "🛑 SL Hit"
+            if current_price >= pos['tp'] or current_price <= pos['sl']: close_trade = True
         else:
             pnl_pct = ((pos['entry'] - current_price) / pos['entry']) * VIRTUAL_LEVERAGE
-            if current_price <= pos['tp']: close_trade, reason = True, "🎯 Auto TP Hit"
-            elif current_price >= pos['sl']: close_trade, reason = True, "🛑 SL Hit"
+            if current_price <= pos['tp'] or current_price >= pos['sl']: close_trade = True
             
         pos['live_pnl'] = pos['invested_inr'] * pnl_pct
             
@@ -195,10 +185,9 @@ for symbol, data in radars.items():
             net_pnl_inr = pos['live_pnl'] - fee_inr
             st.session_state.total_fees_paid += fee_inr
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
-            st.session_state.bot_history.insert(0, {'time': datetime.now().strftime("%H:%M:%S"), 'coin': symbol, 'dir': pos['dir'], 'entry': pos['entry'], 'exit': current_price, 'reason': reason, 'pnl': net_pnl_inr, 'fee': fee_inr})
             del st.session_state.bot_positions[symbol]
 
-    # 2. ⚡ INSTANT SNIPER ENTRY
+    # Instant Sniper Entry
     if symbol not in st.session_state.bot_positions and data['is_signal_active']:
         if bot_is_warmed_up:
             invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
@@ -214,20 +203,43 @@ for symbol, data in radars.items():
                 
                 st.session_state.bot_positions[symbol] = {
                     'dir': data['dir'], 'entry': current_price, 'invested_inr': invest_amount, 
-                    'tp': tp, 'sl': sl, 'live_pnl': 0.0, 'score': data['ai_score'], 'pct': data['alloc_pct']
+                    'tp': tp, 'sl': sl, 'live_pnl': 0.0
                 }
-                st.toast(f"⚡ Instant Sniper Entry: {symbol} | Confidence {data['ai_score']}", icon="🚀")
+                st.toast(f"⚡ Sniper Entry Executed: {symbol}", icon="🚀")
 
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 unrealized_pnl = sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + unrealized_pnl
 
-# ================= 📊 TOP: TRADING DASHBOARD =================
-w_col1, w_col2, w_col3, w_col4 = st.columns(4)
-with w_col1: st.markdown(f'<div class="wallet-card"><div style="color:#848E9C; font-size:11px;">TOTAL PORTFOLIO (INR)</div><div class="wallet-val" style="color:{"#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF0000"};">₹{st.session_state.total_balance_inr:,.2f}</div></div>', unsafe_allow_html=True)
-with w_col2: st.markdown(f'<div class="wallet-card"><div style="color:#848E9C; font-size:11px;">NET PROFIT/LOSS</div><div class="wallet-val" style="color:{"#00FF00" if (st.session_state.total_balance_inr - 10000) >= 0 else "#FF0000"};">₹{st.session_state.total_balance_inr - 10000:,.2f}</div></div>', unsafe_allow_html=True)
-with w_col3: st.markdown(f'<div class="wallet-card"><div style="color:#848E9C; font-size:11px;">ACTIVE MARGIN</div><div class="wallet-val" style="color:#FCD535;">₹{active_invested:,.2f}</div></div>', unsafe_allow_html=True)
-with w_col4: st.markdown(f'<div class="wallet-card"><div style="color:#848E9C; font-size:11px;">FEES PAID</div><div class="wallet-val" style="color:#FF1744;">-₹{st.session_state.total_fees_paid:,.2f}</div></div>', unsafe_allow_html=True)
+# ================= 💼 TOP: MASTER TERMINAL BOX =================
+tot_color = "#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF1744"
+pnl_color = "#00FF00" if (st.session_state.total_balance_inr - 10000) >= 0 else "#FF1744"
+
+st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #14181C 0%, #0B0E11 100%); border: 2px solid #2B3139; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 15px;">
+        <div style="text-align:center; font-size:16px; font-weight:900; color:#00BFFF; margin-bottom: 15px; letter-spacing: 2px; border-bottom: 1px solid #2B3139; padding-bottom:10px;">
+            💼 BG STAR TERMINAL
+        </div>
+        <div style="display:flex; justify-content:space-between; text-align:center;">
+            <div style="width: 25%;">
+                <div style="font-size:10px; color:#848E9C; font-weight:bold;">PORTFOLIO</div>
+                <div style="font-size:16px; font-weight:bold; color:{tot_color};">₹{st.session_state.total_balance_inr:,.2f}</div>
+            </div>
+            <div style="width: 25%; border-left: 1px solid #2B3139;">
+                <div style="font-size:10px; color:#848E9C; font-weight:bold;">NET PNL</div>
+                <div style="font-size:16px; font-weight:bold; color:{pnl_color};">₹{st.session_state.total_balance_inr - 10000:,.2f}</div>
+            </div>
+            <div style="width: 25%; border-left: 1px solid #2B3139;">
+                <div style="font-size:10px; color:#848E9C; font-weight:bold;">MARGIN</div>
+                <div style="font-size:16px; font-weight:bold; color:#FCD535;">₹{active_invested:,.2f}</div>
+            </div>
+            <div style="width: 25%; border-left: 1px solid #2B3139;">
+                <div style="font-size:10px; color:#848E9C; font-weight:bold;">FEES</div>
+                <div style="font-size:16px; font-weight:bold; color:#FF1744;">-₹{st.session_state.total_fees_paid:,.2f}</div>
+            </div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # 🟢 LIVE POSITIONS
 if st.session_state.bot_positions:
@@ -235,15 +247,13 @@ if st.session_state.bot_positions:
         p = st.session_state.bot_positions[c]
         card_class = "pos-long" if p['dir'] == "LONG" else "pos-short"
         st.markdown(f"""
-            <div class="pos-card {card_class}">
+            <div class="pos-card {card_class}" style="margin-top:0px; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div><span style="font-size:18px; font-weight:bold; color:#EAECEF;">{c}</span> <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; font-size:11px; color:{'#00FF00' if p['dir']=='LONG' else '#FF0000'};">{p['dir']}</span></div>
                     <div style="font-size:18px; font-weight:bold; color:{'#00FF00' if p['live_pnl'] >= 0 else '#FF0000'};">₹{p['live_pnl']:,.2f}</div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
-
-st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
 # ================= 🧭 MIDDLE: ANALYSIS RADAR (FOR SELECTED COIN) =================
 active_symbol = st.session_state.active_coin.split("/")[0]
@@ -274,12 +284,6 @@ if active_data:
                 <div style="text-align:center; font-size:24px; font-weight:900; color:#FCD535;">{st.session_state.active_coin}</div>
                 <div style="text-align:center; font-size:28px; font-weight:bold; color:#EAECEF; margin-bottom:10px;">${active_data['price']:,.{dec}f}</div>
                 <div style="text-align:center; font-size:14px; font-weight:bold; background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; border-bottom: 2px solid #FCD535;">{active_data['signal']}</div>
-                <hr style="margin:10px 0;">
-                <div style="font-size:12px; color:#848E9C; line-height:1.8;">
-                    <b>🛡️ Support:</b> <span style="color:#00FF00; float:right;">${active_data['sup']:,.{dec}f}</span><br>
-                    <b>🛑 Resist:</b> <span style="color:#FF1744; float:right;">${active_data['res']:,.{dec}f}</span><br>
-                    <b>📉 ATR Vol:</b> <span style="color:#00BFFF; float:right;">{active_data['atr']:.4f}</span>
-                </div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -299,7 +303,6 @@ for i, col_box in enumerate(row1 + row2):
                 st.session_state.active_coin = f"{c_sym}/USDT"
                 st.rerun()
 
-# 7s Auto Refresh
-if auto_refresh: 
-    time.sleep(7)
-    st.rerun()
+# ⏱️ 7s BACKGROUND AUTO-REFRESH (সুইচ ছাড়াই কাজ করবে)
+time.sleep(7)
+st.rerun()
