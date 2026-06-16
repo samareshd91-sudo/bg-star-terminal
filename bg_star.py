@@ -8,22 +8,28 @@ from datetime import datetime
 # 👑 Premium Layout Config
 st.set_page_config(page_title="BG STAR MASTER TERMINAL", layout="wide", initial_sidebar_state="collapsed")
 
-# 🌟 Ultra-Premium CSS (Mobile Lock & Perfect Scrollbar)
+# 🌟 Ultra-Premium CSS (Zero Top Margin & Header Hidden)
 st.markdown("""
     <style>
+    /* ডিফল্ট হেডার এবং ফালতু লাইন পুরোপুরি গায়েব করার লক */
+    [data-testid="stHeader"], header, #MainMenu, footer { 
+        display: none !important; 
+        visibility: hidden !important; 
+    }
+    
     html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
         background-color: #0B0E11 !important; color: #EAECEF !important; 
         overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
         touch-action: pan-y !important; 
-        padding-top: 1rem !important; 
     }
     
     .block-container {
+        padding-top: 15px !important; /* ওপরের ফাঁকা জায়গা একদম কমানো হলো */
         padding-right: 15px !important;
         padding-left: 10px !important;
     }
     
-    /* 📱 কাস্টম প্রো স্ক্রলবার (মিডিয়াম সাইজ, লেখা ঢাকবে না) */
+    /* 📱 কাস্টম প্রো স্ক্রলবার */
     ::-webkit-scrollbar { width: 16px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { 
@@ -158,15 +164,14 @@ def fetch_coin_radar(coin):
 
 radars = {c.split("/")[0]: fetch_coin_radar(c) for c in SCALPING_COINS}
 
-# ================= 🤖 AUTO PAPER-TRADING ENGINE (SILENT) =================
+# ================= 🤖 AUTO PAPER-TRADING ENGINE =================
 time_since_app_opened = time.time() - st.session_state.app_start_time
-bot_is_warmed_up = time_since_app_opened > 15 # 15s shield
+bot_is_warmed_up = time_since_app_opened > 15 
 
 for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # 1. Manage Live Positions & PNL
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade = False
@@ -186,7 +191,6 @@ for symbol, data in radars.items():
             st.session_state.available_balance_inr += pos['invested_inr'] + net_pnl_inr
             del st.session_state.bot_positions[symbol]
 
-    # 2. Sniper Auto Entry
     if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
         invest_amount = st.session_state.total_balance_inr * (data['alloc_pct'] / 100.0)
         if st.session_state.available_balance_inr >= invest_amount and invest_amount > 10:
@@ -208,15 +212,13 @@ for symbol, data in radars.items():
 active_invested = sum(p['invested_inr'] for p in st.session_state.bot_positions.values())
 st.session_state.total_balance_inr = st.session_state.available_balance_inr + active_invested + sum(p['live_pnl'] for p in st.session_state.bot_positions.values())
 
-# ================= 💼 TOP: MASTER PAPER TRADING BOX =================
+# ================= 💼 TOP: MASTER PAPER TRADING BOX (Cleaned) =================
 tot_color = "#00FF00" if st.session_state.total_balance_inr >= 10000 else "#FF1744"
 pnl_color = "#00FF00" if (st.session_state.total_balance_inr - 10000) >= 0 else "#FF1744"
 
+# 🛡️ ওপরের বর্ডারওয়ালা টাইটেল লাইনটা পুরোপুরি ডিলিট করে দেওয়া হয়েছে
 st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #14181C 0%, #0B0E11 100%); border: 2px solid #2B3139; border-radius: 12px; padding: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 10px;">
-        <div style="text-align:center; font-size:15px; font-weight:900; color:#00BFFF; margin-bottom: 10px; letter-spacing: 1px; border-bottom: 1px solid #2B3139; padding-bottom:8px;">
-            💼 BG STAR AUTO-TERMINAL
-        </div>
+    <div style="background: linear-gradient(135deg, #14181C 0%, #0B0E11 100%); border: 2px solid #2B3139; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 10px;">
         <div style="display:flex; justify-content:space-between; text-align:center; flex-wrap: nowrap;">
             <div style="flex: 1; padding: 0 2px;">
                 <div style="font-size:9px; color:#848E9C; font-weight:bold; white-space:nowrap;">PORTFOLIO</div>
@@ -238,7 +240,7 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# 🟢 LIVE POSITIONS (দেখা যাবে যখন বট ট্রেড নেবে)
+# 🟢 LIVE POSITIONS 
 if st.session_state.bot_positions:
     for c in list(st.session_state.bot_positions.keys()):
         p = st.session_state.bot_positions[c]
@@ -252,7 +254,7 @@ if st.session_state.bot_positions:
             </div>
         """, unsafe_allow_html=True)
 
-# ================= 🧭 MIDDLE: MARKET ANALYSIS (FOR KNOWLEDGE) =================
+# ================= 🧭 MIDDLE: MARKET ANALYSIS =================
 active_symbol = st.session_state.active_coin.split("/")[0]
 active_data = radars.get(active_symbol)
 
@@ -265,14 +267,13 @@ if active_data:
     with f_col3:
         st.markdown(f'<div class="feature-card"><div class="feature-title">📊 VOLUME</div><div class="feature-val" style="color:{active_data["vol_color"]};">{active_data["vol_status"]}</div></div>', unsafe_allow_html=True)
 
-    # ================= ⚡ BOTTOM: CHART & FULL SIGNAL DETAILS =================
+    # ================= ⚡ BOTTOM: CHART & FULL DETAILS =================
     chart_col, info_col = st.columns([2.3, 1])
     with chart_col:
         fig = go.Figure(data=[go.Candlestick(x=active_data['df'].index, open=active_data['df']['open'], high=active_data['df']['high'], low=active_data['df']['low'], close=active_data['df']['close'])])
         fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_9'], name='EMA 9', line=dict(color='#00BFFF', width=2)))
         fig.add_trace(go.Scatter(x=active_data['df'].index, y=active_data['df']['ema_50'], name='EMA 50', line=dict(color='#FCD535', width=3, dash='dot')))
         
-        # 🛡️ চার্টটাকে সুন্দর একটা বক্সের লুক দেওয়া হয়েছে
         fig.update_layout(
             template="plotly_dark", height=380, margin=dict(l=5, r=5, t=30, b=5), 
             xaxis_rangeslider_visible=False, 
@@ -314,7 +315,6 @@ for i, col_box in enumerate(row1 + row2):
                 st.session_state.active_coin = f"{c_sym}/USDT"
                 st.rerun()
 
-# ⏱️ 7s BACKGROUND AUTO-REFRESH (কোনো সুইচ নেই)
+# ⏱️ 7s BACKGROUND AUTO-REFRESH
 time.sleep(7)
 st.rerun()
-        
