@@ -5,59 +5,29 @@ import plotly.graph_objects as go
 import time 
 import json
 import os
+import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
 
-# 👑 Premium Layout Config
-st.set_page_config(page_title="BG STAR MASTER TERMINAL", layout="wide", initial_sidebar_state="collapsed")
+# ================= 🔑 AI API SETTINGS (REAL AI) =================
+# আপনার দেওয়া আসল Hugging Face API Key এখানে বসানো হয়েছে
+HF_API_KEY = "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"  
 
-# 🌟 Ultra-Premium CSS
-st.markdown("""
-    <style>
-    [data-testid="stHeader"], header, #MainMenu, footer { display: none !important; visibility: hidden !important; }
-    html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
-        background-color: #0B0E11 !important; color: #EAECEF !important; 
-        overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
-        touch-action: pan-y !important; 
-    }
-    .block-container { padding-top: 15px !important; padding-right: 15px !important; padding-left: 10px !important; }
-    ::-webkit-scrollbar { width: 16px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { 
-        background-color: #FCD535; border-radius: 12px; 
-        border-style: solid; border-color: #0B0E11; border-width: 25px 4px; background-clip: padding-box;
-    }
-    ::-webkit-scrollbar-thumb:hover { background-color: #F39C12; }
-    
-    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px 15px 5px 15px; margin-top: 5px; margin-bottom: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .pos-long { border-left-color: #00FF00; }
-    .pos-short { border-left-color: #FF0000; }
-    
-    .history-box { background-color: #14181C; border: 1px solid #2B3139; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 12px; }
-    .hist-row { display: flex; justify-content: space-between; border-bottom: 1px solid #1E2329; padding: 5px 0; }
-    .hist-row:last-child { border-bottom: none; }
-    
-    .feature-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 10px;}
-    .feature-title { color: #848E9C; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-    .feature-val { font-size: 18px; font-weight: bold; margin-top: 8px; }
-    div.stButton > button { border-radius: 8px !important; font-weight: bold !important; width: 100% !important; margin-bottom: 2px; background-color: #181A20 !important; color: #EAECEF !important; border: 1px solid #2B3139 !important;}
-    div.stButton > button:hover { border-color: #FCD535 !important; background-color: #2B3139 !important;}
-    hr { border-color: #2B3139; margin: 15px 0; }
-    </style>
-""", unsafe_allow_html=True)
+# 👑 Premium Layout Config
+st.set_page_config(page_title="BG STAR SENTINEL (AI)", layout="wide", initial_sidebar_state="collapsed")
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "15m" 
-FEE_RATE = 0.002 # CoinDCX Pro Fee
+FEE_RATE = 0.002 
 VIRTUAL_LEVERAGE = 10 
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "AVAX/USDT", "LINK/USDT", "DOGE/USDT"]
 DATA_FILE = "bgstar_trading_data.json" 
 
-# ================= 💾 SMART MEMORY SAVER FUNCTIONS =================
+# ================= 💾 SMART MEMORY SAVER =================
 def load_saved_data():
     if os.path.exists(DATA_FILE):
         try:
-            with open(DATA_FILE, "r") as f:
-                return json.load(f)
+            with open(DATA_FILE, "r") as f: return json.load(f)
         except: return None
     return None
 
@@ -71,8 +41,7 @@ def save_trading_data():
         'cooldowns': st.session_state.cooldowns,
         'auto_trade_active': st.session_state.auto_trade_active
     }
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
+    with open(DATA_FILE, "w") as f: json.dump(data, f)
 
 # ================= 🧠 Bot Memory Setup =================
 if 'app_start_time' not in st.session_state: 
@@ -98,6 +67,89 @@ if 'app_start_time' not in st.session_state:
         st.session_state.auto_trade_active = True
         save_trading_data()
 
+# ================= 🤖 100% REAL AI SENTIMENT ENGINE =================
+@st.cache_data(ttl=300) 
+def get_real_ai_sentiment(coin_symbol):
+    if HF_API_KEY == "":
+        return {"label": "neutral", "news": "⚠️ API KEY MISSING! AI IS OFFLINE."}
+        
+    try:
+        # 1. Fetching Real Live Crypto News from RSS
+        resp = requests.get('https://cointelegraph.com/rss', timeout=5)
+        root = ET.fromstring(resp.content)
+        
+        latest_news = ""
+        for item in root.findall('./channel/item/title'):
+            if coin_symbol.lower() in item.text.lower() or 'crypto' in item.text.lower():
+                latest_news = item.text
+                break
+                
+        if not latest_news:
+            return {"label": "neutral", "news": f"No immediate news impact found for {coin_symbol}."}
+
+        # 2. Analyzing News with Hugging Face FinBERT
+        API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+        
+        response = requests.post(API_URL, headers=headers, json={"inputs": latest_news}, timeout=10)
+        result = response.json()
+        
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], list):
+            sentiment = result[0][0]['label'] 
+            return {"label": sentiment, "news": latest_news}
+        else:
+            return {"label": "neutral", "news": f"AI Parsing: Standard Market."}
+            
+    except Exception as e:
+        return {"label": "neutral", "news": "AI Server Connection Timeout."}
+
+# Fetch Real AI Data
+active_sym = st.session_state.active_coin.split("/")[0]
+ai_data = get_real_ai_sentiment(active_sym)
+is_critical_danger = ai_data['label'] == "negative"
+
+# ================= 🌟 DYNAMIC CSS (RED ALERT MODE) =================
+if is_critical_danger:
+    st.markdown("""
+        <style>
+        .block-container { border: 2px solid #FF1744 !important; box-shadow: inset 0 0 50px rgba(255, 23, 68, 0.2); }
+        .alert-box { background-color: #FF1744; color: white; padding: 10px; text-align: center; font-weight: 900; font-size: 16px; border-radius: 8px; margin-bottom: 15px; animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.5; } }
+        </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("<style>.alert-box { display: none; }</style>", unsafe_allow_html=True)
+
+st.markdown("""
+    <style>
+    [data-testid="stHeader"], header, #MainMenu, footer { display: none !important; visibility: hidden !important; }
+    html, body, [data-testid="stAppViewContainer"], .main, .block-container { 
+        background-color: #0B0E11 !important; color: #EAECEF !important; 
+        overscroll-behavior-y: none !important; overscroll-behavior-x: none !important;
+        touch-action: pan-y !important; 
+    }
+    .block-container { padding-top: 15px !important; padding-right: 15px !important; padding-left: 10px !important; }
+    ::-webkit-scrollbar { width: 16px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background-color: #FCD535; border-radius: 12px; border-style: solid; border-color: #0B0E11; border-width: 25px 4px; background-clip: padding-box; }
+    .pos-card { background-color: #181A20; border-left: 4px solid #FCD535; border-radius: 8px; padding: 15px 15px 5px 15px; margin-top: 5px; margin-bottom: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .pos-long { border-left-color: #00FF00; }
+    .pos-short { border-left-color: #FF0000; }
+    .history-box { background-color: #14181C; border: 1px solid #2B3139; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 12px; }
+    .hist-row { display: flex; justify-content: space-between; border-bottom: 1px solid #1E2329; padding: 5px 0; }
+    .feature-card { background: linear-gradient(135deg, #181A20 0%, #1E2329 100%); border: 1px solid #2B3139; border-radius: 12px; padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 10px;}
+    .feature-title { color: #848E9C; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+    .feature-val { font-size: 18px; font-weight: bold; margin-top: 8px; }
+    div.stButton > button { border-radius: 8px !important; font-weight: bold !important; width: 100% !important; margin-bottom: 2px; background-color: #181A20 !important; color: #EAECEF !important; border: 1px solid #2B3139 !important;}
+    div.stButton > button:hover { border-color: #FCD535 !important; background-color: #2B3139 !important;}
+    hr { border-color: #2B3139; margin: 15px 0; }
+    </style>
+""", unsafe_allow_html=True)
+
+# 🚨 RED ALERT BANNER 
+if is_critical_danger:
+    st.markdown(f'<div class="alert-box">🚨 AI WARNING: MARKET DANGER ON {active_sym}! 🚨<br><span style="font-size:11px; font-weight:normal;">Live News: {ai_data["news"]}</span></div>', unsafe_allow_html=True)
+
 def fetch_coin_radar(coin):
     try:
         bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
@@ -106,7 +158,6 @@ def fetch_coin_radar(coin):
         df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
         df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
-        
         df['prev_close'] = df['close'].shift(1)
         df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
         df['atr'] = df['tr'].rolling(14).mean()
@@ -146,18 +197,19 @@ def fetch_coin_radar(coin):
         
         signal_text, is_signal_active, signal_dir, alloc_pct = "🎯 SCANNING...", False, "NONE", 0.0
         
+        # 🧠 AI SENTIMENT LOCK
         if trend_50 == "BULLISH" and ema_bullish and is_volume_high and rsi < 65 and macd_bullish:
-            ai_score = min(50 + 20 + (15 if rsi < 45 else 0), 100)
-            signal_text, is_signal_active, signal_dir = f"🚀 SNIPER BUY", True, "LONG"
-            if ai_score >= 80: alloc_pct = 7.0
-            else: alloc_pct = 3.0
+            if is_critical_danger and coin.split("/")[0] == active_sym:
+                signal_text = "🚫 BUY BLOCKED BY AI (REAL NEWS)"
+            else:
+                ai_score = min(50 + 20 + (15 if rsi < 45 else 0), 100)
+                signal_text, is_signal_active, signal_dir = f"🚀 SNIPER BUY", True, "LONG"
+                alloc_pct = 7.0 if ai_score >= 80 else 3.0
             
-        # 🛠️ এই লাইনটিতেই ভুল ছিল, "charges" শব্দটা মুছে ঠিক করে দেওয়া হয়েছে!
         elif trend_50 == "BEARISH" and not ema_bullish and is_volume_high and rsi > 35 and not macd_bullish:
             ai_score = min(50 + 20 + (15 if rsi > 55 else 0), 100)
             signal_text, is_signal_active, signal_dir = f"🧨 SNIPER SELL", True, "SHORT"
-            if ai_score >= 80: alloc_pct = 7.0
-            else: alloc_pct = 3.0
+            alloc_pct = 7.0 if ai_score >= 80 else 3.0
                 
         return {
             'price': curr_price, 'signal': signal_text, 'dir': signal_dir,
@@ -183,7 +235,6 @@ for symbol, data in radars.items():
     if not data: continue
     current_price = data['price']
     
-    # Auto TP/SL Closures
     if symbol in st.session_state.bot_positions:
         pos = st.session_state.bot_positions[symbol]
         close_trade = False
@@ -192,6 +243,8 @@ for symbol, data in radars.items():
             pnl_pct = ((current_price - pos['entry']) / pos['entry']) * VIRTUAL_LEVERAGE
             if current_price >= pos['tp']: close_trade, reason = True, "🎯 Auto TP"
             elif current_price <= pos['sl']: close_trade, reason = True, "🛑 Auto SL"
+            elif is_critical_danger and symbol == active_sym: 
+                close_trade, reason = True, "🚨 AI EMERGENCY EXIT"
         else:
             pnl_pct = ((pos['entry'] - current_price) / pos['entry']) * VIRTUAL_LEVERAGE
             if current_price <= pos['tp']: close_trade, reason = True, "🎯 Auto TP"
@@ -209,7 +262,6 @@ for symbol, data in radars.items():
             del st.session_state.bot_positions[symbol]
             data_changed = True
 
-    # New Entries 
     if st.session_state.auto_trade_active:
         if symbol not in st.session_state.bot_positions and data['is_signal_active'] and bot_is_warmed_up:
             if symbol not in st.session_state.cooldowns:
@@ -306,7 +358,6 @@ if st.session_state.bot_positions:
                 
                 st.session_state.trade_history.insert(0, {'time': datetime.now().strftime("%H:%M"), 'coin': c, 'dir': p['dir'], 'pnl': net_pnl, 'reason': '👤 Manual Close'})
                 st.session_state.cooldowns[c] = time.time() + 300
-                
                 del st.session_state.bot_positions[c]
                 save_trading_data() 
                 st.toast(f"✅ {c} Closed! Sent to History.", icon="💰")
@@ -339,13 +390,12 @@ if st.session_state.trade_history:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ================= 🧭 MIDDLE: MARKET ANALYSIS =================
-active_symbol = st.session_state.active_coin.split("/")[0]
-active_data = radars.get(active_symbol)
+active_data = radars.get(active_sym)
 
 if active_data:
     f_col1, f_col2, f_col3 = st.columns(3)
     with f_col1:
-        st.markdown(f'<div class="feature-card"><div class="feature-title">🧭 MARKET ({active_symbol})</div><div class="feature-val" style="color:{active_data["state_color"]};">{active_data["state"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="feature-card"><div class="feature-title">🧭 MARKET ({active_sym})</div><div class="feature-val" style="color:{active_data["state_color"]};">{active_data["state"]}</div></div>', unsafe_allow_html=True)
     with f_col2:
         st.markdown(f'<div class="feature-card"><div class="feature-title">⚡ ORDERFLOW</div><div class="feature-val" style="color:{active_data["act_color"]};">{active_data["activity"]}</div></div>', unsafe_allow_html=True)
     with f_col3:
@@ -362,14 +412,17 @@ if active_data:
             template="plotly_dark", height=380, margin=dict(l=5, r=5, t=30, b=5), 
             xaxis_rangeslider_visible=False, 
             paper_bgcolor='#14181C', plot_bgcolor='#14181C',
-            title=dict(text=f"📊 {active_symbol} Live Chart", font=dict(size=14, color="#848E9C"), x=0.5)
+            title=dict(text=f"📊 {active_sym} Live Chart", font=dict(size=14, color="#848E9C"), x=0.5)
         )
         st.plotly_chart(fig, use_container_width=True)
         
     with info_col:
-        dec = 4 if "DOGE" in active_symbol or "XRP" in active_symbol else 2
+        dec = 4 if "DOGE" in active_sym or "XRP" in active_sym else 2
+        sentiment_display = f"<div style='font-size:11px; margin-bottom:5px; color:#848E9C;'>🧠 AI Sentiment: <span style='color:{'#FF1744' if ai_data['label']=='negative' else '#00FF00' if ai_data['label']=='positive' else '#FCD535'}; text-transform:uppercase;'>{ai_data['label']}</span></div>"
+        
         st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1E2329 0%, #14181C 100%); border-radius: 12px; padding: 15px; border: 1px solid #2B3139;">
+                {sentiment_display}
                 <div style="text-align:center; font-size:20px; font-weight:900; color:#FCD535;">{st.session_state.active_coin}</div>
                 <div style="text-align:center; font-size:24px; font-weight:bold; color:#EAECEF; margin-bottom:10px;">${active_data['price']:,.{dec}f}</div>
                 <div style="text-align:center; font-size:13px; font-weight:bold; background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; border-bottom: 2px solid #FCD535;">{active_data['signal']}</div>
@@ -402,8 +455,7 @@ for i, col_box in enumerate(row1 + row2):
 # 🗑️ RESET DATA BUTTON
 st.markdown("<br>", unsafe_allow_html=True)
 if st.button("🔄 Reset Demo Account (Delete Data)"):
-    if os.path.exists(DATA_FILE):
-        os.remove(DATA_FILE)
+    if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
     st.session_state.clear()
     st.toast("✅ Account Reset to ₹10,000!", icon="🔄")
     time.sleep(1)
