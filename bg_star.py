@@ -8,7 +8,6 @@ import os
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
-import concurrent.futures
 
 # ================= 🔑 AI API SETTINGS =================
 HF_API_KEY = "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"  
@@ -21,7 +20,7 @@ selected_tf = "15m"
 FEE_RATE = 0.002 
 VIRTUAL_LEVERAGE = 10 
 
-# 🎯 PRO TIP: মাত্র ৪টি হাই-ভলিউম কয়েনে ফোকাস (আপনার বন্ধুর পরামর্শ অনুযায়ী)
+# 🎯 PRO TIP: ৪টি কয়েন
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"]
 DATA_FILE = "bgstar_trading_data.json" 
 
@@ -112,10 +111,11 @@ is_critical_danger = ai_data['label'] == "negative"
 if is_critical_danger:
     st.markdown(f'<div style="background-color: #FF1744; color: white; padding: 10px; text-align: center; font-weight: bold; border-radius: 8px; margin-bottom: 15px;">🚨 AI WARNING: DANGER ON {active_sym}! 🚨<br><span style="font-size:11px; font-weight:normal;">{ai_data["news"]}</span></div>', unsafe_allow_html=True)
 
-# ================= ⚡ ASYNC PARALLEL SCANNER (4 COINS FAST SCAN) =================
+# ================= ⚡ SEQUENTIAL SCANNER (RAM SAVER) =================
 def fetch_coin_radar(coin):
     try:
-        bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=200)
+        # Limit reduced to 150 to save RAM, but enough for EMA 50
+        bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') + pd.Timedelta(hours=5, minutes=30)
         
@@ -145,7 +145,6 @@ def fetch_coin_radar(coin):
         df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
         atr = df['tr'].rolling(14).mean().iloc[-1]
 
-        # 💡 Educational Logic: বট কেন ট্রেড নিচ্ছে বা নিচ্ছে না তার কারণ
         reasons = []
         if curr_price > df['ema_50'].iloc[-1]: reasons.append("✅ Price > EMA 50 (Up Trend)")
         else: reasons.append("❌ Price < EMA 50 (Down Trend)")
@@ -161,7 +160,6 @@ def fetch_coin_radar(coin):
         is_signal, signal_dir, alloc = False, "NONE", 0.0
         signal_text = "⏳ SCANNING MARKET"
         
-        # Trade Decision Maker
         if curr_price > df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] > df['ema_20'].iloc[-1] and curr_vol > vol_sma and rsi < 65:
             is_signal, signal_dir, alloc, signal_text = True, "LONG", 5.0, "🚀 SNIPER BUY SIGNAL MATCHED!"
         elif curr_price < df['ema_50'].iloc[-1] and df['ema_9'].iloc[-1] < df['ema_20'].iloc[-1] and curr_vol > vol_sma and rsi > 35:
@@ -178,11 +176,12 @@ def fetch_coin_radar(coin):
         }
     except Exception as e: return None
 
-# 🚀 মাত্র ৪টি কয়েন হওয়ায় স্ক্যানিং স্পিড আরও ফাস্ট হলো
+# 🧠 Sequential Scanning to Prevent RAM Overload
 radars = {}
-with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    future_to_coin = {executor.submit(fetch_coin_radar, c): c for c in SCALPING_COINS}
-    for future in concurrent.futures.as_completed(future_to_coin): radars[future_to_coin[future]] = future.result()
+for coin in SCALPING_COINS:
+    result = fetch_coin_radar(coin)
+    if result: radars[coin] = result
+    time.sleep(0.2) # Small pause to let RAM breathe
 
 # ================= 💼 POSITION MANAGER =================
 data_changed = False
@@ -254,7 +253,6 @@ if st.session_state.active_coin in radars and radars[st.session_state.active_coi
     with col2: st.markdown(f"<div class='analyzer-card'><div class='analyzer-title'>⚡ ORDERFLOW</div><div class='analyzer-val' style='color:{data['o_color']}'>{data['orderflow']}</div></div>", unsafe_allow_html=True)
     with col3: st.markdown(f"<div class='analyzer-card'><div class='analyzer-title'>📊 VOLUME</div><div class='analyzer-val' style='color:{data['v_color']}'>{data['vol']}</div></div>", unsafe_allow_html=True)
     
-    # Chart
     df = data['df']
     fig = go.Figure(data=[go.Candlestick(x=df['timestamp'], open=df['open'], high=df['high'], low=df['low'], close=df['close'], increasing_line_color='#00FF00', decreasing_line_color='#FF1744')])
     fig.add_trace(go.Scatter(x=df['timestamp'], y=df['ema_9'], mode='lines', line=dict(color='#00BFFF', width=1.5), name='EMA 9'))
@@ -265,7 +263,6 @@ if st.session_state.active_coin in radars and radars[st.session_state.active_coi
     st.markdown(f"<div style='text-align:center; font-size:22px; font-weight:bold; color:#FCD535; margin-top:10px;'>{st.session_state.active_coin} <br> <span style='color:#EAECEF'>${data['price']:.4f}</span></div>", unsafe_allow_html=True)
     st.markdown(f"<div class='sniper-btn'>{data['signal_text']}</div>", unsafe_allow_html=True)
 
-    # 💡 শেখার জন্য লজিক বক্স (TRADE REASONS)
     st.markdown("<div style='margin-top:5px; color:#FCD535; font-size:12px; font-weight:bold; letter-spacing: 1px;'>💡 WHY THIS MARKET CONDITION?</div>", unsafe_allow_html=True)
     for r in data['reasons']:
         st.markdown(f"<div class='logic-box'>{r}</div>", unsafe_allow_html=True)
