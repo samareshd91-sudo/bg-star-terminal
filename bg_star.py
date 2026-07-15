@@ -249,13 +249,13 @@ with col_b:
 if st.session_state.active_coin in all_data:
     data = all_data[st.session_state.active_coin]
     
-    # 6.1 METRIC CARDS (RESTORED)
+    # 6.1 METRIC CARDS
     c1, c2, c3, c4 = st.columns(4)
     
     with c1:
         t_val = "আপ-ট্রেন্ড (UP)" if data['trend_up'] else "ডাউন-ট্রেন্ড (DOWN)"
         t_color = "#00FF00" if data['trend_up'] else "#FF1744"
-        st.markdown(f"<div class='metric-card' style='border-color:{t_color}'><div class='metric-title'>১. მেইন ট্রেন্ড (EMA 50)</div><div class='metric-value' style='color:{t_color}'>{t_val}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card' style='border-color:{t_color}'><div class='metric-title'>১. মেইন ট্রেন্ড (EMA 50)</div><div class='metric-value' style='color:{t_color}'>{t_val}</div></div>", unsafe_allow_html=True)
 
     with c2:
         m_val = "বায়াররা শক্তিশালী 🟢" if data['momentum_bullish'] else "সেলাররা শক্তিশালী 🔴"
@@ -306,4 +306,49 @@ if st.session_state.active_coin in all_data:
         st.markdown(f"🔹 <b>বর্তমান প্রাইস:</b> {data['price']:.4f}", unsafe_allow_html=True)
         st.markdown(f"🔹 <b>EMA 50 (ট্রেন্ড লাইন):</b> {data['ema50']:.4f}", unsafe_allow_html=True)
         st.markdown(f"🔹 <b>EMA 5 (ফাস্ট):</b> {data['ema5']:.4f}", unsafe_allow_html=True)
-        st.m
+        st.markdown(f"🔹 <b>EMA 13 (স্লো):</b> {data['ema13']:.4f}", unsafe_allow_html=True)
+        st.markdown(f"🔹 <b>RSI (14):</b> {data['rsi']:.1f}", unsafe_allow_html=True)
+        st.markdown(f"🔹 <b>বর্তমান ক্যান্ডেল ভলিউম:</b> {data['curr_vol']:.0f}", unsafe_allow_html=True)
+        st.markdown(f"🔹 <b>এভারেজ ভলিউম (২০ ক্যান্ডেল):</b> {data['vol_sma']:.0f}", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col_l2:
+        st.markdown("<div class='learning-box'>", unsafe_allow_html=True)
+        st.markdown(f"<b style='color:#FCD535;'>✅ STRONG BUY কন্ডিশন চেকলিস্ট</b><br>", unsafe_allow_html=True)
+        
+        ck_trend_buy = "✅" if data['price'] > data['ema50'] else "❌"
+        ck_mom_buy = "✅" if data['ema5'] > data['ema13'] else "❌"
+        ck_rsi_buy = "✅" if data['rsi'] < 70 else "❌"
+        ck_pat_buy = "✅" if data['bullish_pattern'] or data['buyer_vol_spike'] else "❌"
+        
+        st.markdown(f"{ck_trend_buy} <b>ট্রেন্ড আপ:</b> প্রাইস > EMA 50", unsafe_allow_html=True)
+        st.markdown(f"{ck_mom_buy} <b>মোমেন্টাম:</b> EMA 5 > EMA 13", unsafe_allow_html=True)
+        st.markdown(f"{ck_rsi_buy} <b>ওভারবট নয়:</b> RSI 70 এর নিচে", unsafe_allow_html=True)
+        st.markdown(f"{ck_pat_buy} <b>কনফার্মেশন:</b> বুলিশ প্যাটার্ন বা হাই ভলিউম", unsafe_allow_html=True)
+        
+        st.markdown(f"<br><b style='color:#FF1744;'>❌ STRONG SELL কন্ডিশন চেকলিস্ট</b><br>", unsafe_allow_html=True)
+        ck_trend_sell = "✅" if data['price'] < data['ema50'] else "❌"
+        ck_mom_sell = "✅" if data['ema5'] < data['ema13'] else "❌"
+        ck_rsi_sell = "✅" if data['rsi'] > 30 else "❌"
+        ck_pat_sell = "✅" if data['bearish_pattern'] or data['seller_vol_spike'] else "❌"
+        
+        st.markdown(f"{ck_trend_sell} <b>ট্রেন্ড ডাউন:</b> প্রাইস < EMA 50", unsafe_allow_html=True)
+        st.markdown(f"{ck_mom_sell} <b>মোমেন্টাম:</b> EMA 5 < EMA 13", unsafe_allow_html=True)
+        st.markdown(f"{ck_rsi_sell} <b>ওভারসোল্ড নয়:</b> RSI 30 এর উপরে", unsafe_allow_html=True)
+        st.markdown(f"{ck_pat_sell} <b>কনফার্মেশন:</b> বিয়ারিশ প্যাটার্ন বা হাই ভলিউম", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # 6.4 Interactive Chart
+    st.markdown("<br>", unsafe_allow_html=True)
+    df_chart = data['df'].tail(100)
+    fig = go.Figure(data=[go.Candlestick(x=df_chart['timestamp'], open=df_chart['open'], high=df_chart['high'], low=df_chart['low'], close=df_chart['close'], increasing_line_color='#00FF00', decreasing_line_color='#FF1744')])
+    fig.add_trace(go.Scatter(x=df_chart['timestamp'], y=df_chart['ema_5'], mode='lines', line=dict(color='#00BFFF', width=1.5), name='EMA 5'))
+    fig.add_trace(go.Scatter(x=df_chart['timestamp'], y=df_chart['ema_13'], mode='lines', line=dict(color='#FF00FF', width=1.5), name='EMA 13'))
+    fig.add_trace(go.Scatter(x=df_chart['timestamp'], y=df_chart['ema_50'], mode='lines', line=dict(color='#FFD700', width=2, dash='dot'), name='EMA 50'))
+    
+    fig.update_layout(height=450, margin=dict(l=0,r=0,t=10,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(showgrid=False, rangeslider=dict(visible=False)), yaxis=dict(showgrid=True, gridcolor='#2B3139', side='right'))
+    st.plotly_chart(fig, use_container_width=True)
+
+# ================= 🔄 7. AUTO REFRESH LOOP =================
+time.sleep(10)
+st.rerun()
