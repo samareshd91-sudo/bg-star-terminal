@@ -26,7 +26,7 @@ st.markdown("""
     .metric-value { font-size: 16px; font-weight: bold; margin-bottom: 5px;}
     .reason-box { background: #14151A; border-left: 4px solid #FCD535; padding: 15px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; color: #EAECEF; line-height: 1.6;}
     .learning-box { background: #0B0E11; border: 1px solid #2B3139; padding: 15px; border-radius: 6px; margin-bottom: 15px; line-height: 1.8;}
-    div.stButton > button { border-radius: 6px !important; font-weight: bold !important; width: 100% !important; background-color: #1E2329 !important; color: #EAECEF !important; border: 1px solid #FCD535 !important;}
+    div.stButton > button { border-radius: 6px !important; font-weight: bold !important; width: 100% !important; background-color: #1E2329 !important; color: #EAECEF !important; border: 1px solid #FCD535 !important; margin-bottom: 20px;}
     div.stButton > button:hover { background-color: #FCD535 !important; color: #000000 !important;}
     </style>
 """, unsafe_allow_html=True)
@@ -127,7 +127,7 @@ def fetch_and_analyze(coin):
 
 all_data = {coin: fetch_and_analyze(coin) for coin in SCALPING_COINS if fetch_and_analyze(coin) is not None}
 
-st.markdown("<h3 style='color:#FCD535;'>🚨 স্ক্যাল্পিং মাস্টার লাইভ রাডার (5m + 15m MTF + VWAP)</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:#FCD535;'>🚨 স্ক্যাল্পিং মাস্টার লাইভ রাডার (5m)</h3>", unsafe_allow_html=True)
 tc1, tc2 = st.columns([1, 4])
 with tc1:
     live_status = st.toggle("🔴 লাইভ স্ক্যানার অন/অফ", value=st.session_state.live_mode)
@@ -152,12 +152,22 @@ for coin, data in all_data.items():
         sl = data['swing_low'] if (is_buy and data['swing_low'] < data['price']) else data['price'] - (data['atr'] * 1.5) if is_buy else data['swing_high'] if data['swing_high'] > data['price'] else data['price'] + (data['atr'] * 1.5)
         tp = data['price'] + ((data['price'] - sl) * 1.5) + fee_m if is_buy else data['price'] - ((sl - data['price']) * 1.5) - fee_m
         
-        st.markdown(f"<div class='{cc}'>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([2, 2, 1])
-        with c1: st.markdown(f"<h3 style='color:{cm}; margin:0;'>{ic}: {coin}</h3><div style='font-size:13px; color:#EAECEF;'>📍 এন্ট্রি: {data['price']:.4f} | 📊 VWAP: {data['vwap']:.4f}</div>", unsafe_allow_html=True)
-        with c2: st.markdown(f"<div style='color:#00FF00; font-weight:bold; font-size:15px;'>🎯 টার্গেট: {tp:.4f}</div><div style='color:#FF1744; font-weight:bold; font-size:15px;'>🛑 স্টপ লস: {sl:.4f}</div>", unsafe_allow_html=True)
-        with c3: st.button(f"🔍 চার্ট দেখুন", key=f"btn_{coin}", on_click=change_active_coin, args=(coin,))
-        st.markdown("</div>", unsafe_allow_html=True)
+        # 📌 UI Fix Applied Here (No columns inside div)
+        html_card = f"""
+        <div class='{cc}'>
+            <h3 style='color:{cm}; margin:0 0 10px 0;'>{ic}: {coin}</h3>
+            <div style='display: flex; justify-content: space-between; flex-wrap: wrap; margin-bottom: 8px;'>
+                <span style='font-size:14px; color:#EAECEF;'>📍 এন্ট্রি: <b>{data['price']:.4f}</b></span>
+                <span style='font-size:14px; color:#EAECEF;'>📊 VWAP: <b>{data['vwap']:.4f}</b></span>
+            </div>
+            <div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>
+                <span style='color:#00FF00; font-weight:bold; font-size:15px;'>🎯 টার্গেট: {tp:.4f}</span>
+                <span style='color:#FF1744; font-weight:bold; font-size:15px;'>🛑 SL: {sl:.4f}</span>
+            </div>
+        </div>
+        """
+        st.markdown(html_card, unsafe_allow_html=True)
+        st.button(f"🔍 {coin} চার্ট দেখুন", key=f"btn_{coin}", on_click=change_active_coin, args=(coin,))
 
 if active_signals == 0: st.markdown("<div class='global-alert-normal'>⏳ বর্তমানে কোনো কয়েনে সিগন্যাল নেই। মাস্টার বট মার্কেট ফিল্টার করছে...</div>", unsafe_allow_html=True)
 st.markdown("<hr style='border-color:#2B3139;'>", unsafe_allow_html=True)
