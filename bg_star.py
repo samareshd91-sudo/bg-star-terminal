@@ -4,11 +4,15 @@ import pandas as pd
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
 
+# ================= 👑 1. PAGE CONFIGURATION =================
 st.set_page_config(page_title="TRADE MENTOR: PRO SCALPER MASTER", layout="wide", initial_sidebar_state="collapsed")
+
+# KuCoin এক্সচেঞ্জ সেটআপ (Rate Limit সহ)
 exchange = ccxt.kucoin({'enableRateLimit': True})
 selected_tf = "5m"
 SCALPING_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"]
 
+# ================= 🎨 2. PREMIUM CSS =================
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { background-color: #0B0E11 !important; color: #EAECEF !important; }
@@ -31,103 +35,227 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-if 'active_coin' not in st.session_state: st.session_state.active_coin = "BTC/USDT"
-if 'live_mode' not in st.session_state: st.session_state.live_mode = False 
-def change_active_coin(new_coin): st.session_state.active_coin = new_coin
-if st.session_state.live_mode: st_autorefresh(interval=10000, limit=None, key="live_data_refresh")
+# ================= 🧠 3. STATE & AUTO REFRESH =================
+if 'active_coin' not in st.session_state:
+    st.session_state.active_coin = "BTC/USDT"
+if 'live_mode' not in st.session_state:
+    st.session_state.live_mode = False 
 
+def change_active_coin(new_coin):
+    st.session_state.active_coin = new_coin
+
+if st.session_state.live_mode:
+    st_autorefresh(interval=10000, limit=None, key="live_data_refresh")
+
+# ================= ⚡ 4. HARDCORE CORE ENGINE =================
 def fetch_and_analyze(coin):
     try:
-        bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=500)
-        df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') + pd.Timedelta(hours=5, minutes=30)
-        df_15m = df.set_index('timestamp').resample('15min').agg({'open':'first', 'high':'max', 'low':'min', 'close':'last'}).dropna()
+        # 📌 1. HARDCORE MTF: Fetch Real 15m Data
+        bars_15m = exchange.fetch_ohlcv(coin, timeframe='15m', limit=100)
+        df_15m = pd.DataFrame(bars_15m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df_15m['ema_50'] = df_15m['close'].ewm(span=50, adjust=False).mean()
         mtf_15m_trend_up = df_15m['close'].iloc[-1] > df_15m['ema_50'].iloc[-1]
-        df['date'] = df['timestamp'].dt.date
+
+        # Fetch Main 5m Data
+        bars = exchange.fetch_ohlcv(coin, timeframe=selected_tf, limit=500)
+        df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        
+        # 📌 2. HARDCORE VWAP: UTC Date Reset (TradingView Standard)
+        df['utc_date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.date
         df['tp_v'] = ((df['high'] + df['low'] + df['close']) / 3) * df['volume']
-        df['vwap'] = df.groupby('date')['tp_v'].cumsum() / df.groupby('date')['volume'].cumsum()
-        support_level = df['low'].rolling(window=100).min().iloc[-1]
-        resistance_level = df['high'].rolling(window=100).max().iloc[-1]
+        df['vwap'] = df.groupby('utc_date')['tp_v'].cumsum() / df.groupby('utc_date')['volume'].cumsum()
+        
+        # Convert to IST for Local Display
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') + pd.Timedelta(hours=5, minutes=30)
+        
+        # 📌 3. HARDCORE SUPPORT/RESISTANCE (Institutional Order Blocks)
+        recent_100_vol = df.tail(100)
+        top_5_vol_candles = recent_100_vol.nlargest(5, 'volume')
+        support_level = top_5_vol_candles['low'].min()
+        resistance_level = top_5_vol_candles['high'].max()
+
+        # Indicators Setup
         df['ema_5'] = df['close'].ewm(span=5, adjust=False).mean()
         df['ema_13'] = df['close'].ewm(span=13, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+        
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean() + 1e-10
         df['rsi'] = 100 - (100 / (1 + (gain / loss)))
-        rsi_live, rsi_closed = df['rsi'].iloc[-1], df['rsi'].iloc[-2]
+        
+        rsi_live = df['rsi'].iloc[-1]
+        rsi_closed = df['rsi'].iloc[-2] 
+        
         df['body'] = abs(df['open'] - df['close'])
         df['upper_shadow'] = df['high'] - df[['open', 'close']].max(axis=1)
         df['lower_shadow'] = df[['open', 'close']].min(axis=1) - df['low']
         df['is_green'] = df['close'] > df['open']
         df['is_red'] = df['close'] < df['open']
-        c2, c3, c4 = df.iloc[-2], df.iloc[-3], df.iloc[-4]
+        
+        c2 = df.iloc[-2]
+        c3 = df.iloc[-3]
+        c4 = df.iloc[-4]
+        
         is_hammer = (c2['lower_shadow'] >= (2 * c2['body'])) and (c2['upper_shadow'] <= c2['body']) and c2['body'] > 0
         is_shooting_star = (c2['upper_shadow'] >= (2 * c2['body'])) and (c2['lower_shadow'] <= c2['body']) and c2['body'] > 0
         is_be = c3['is_red'] and c2['is_green'] and (c2['close'] >= c3['open']) and (c2['open'] <= c3['close']) and (c2['body'] > c3['body'])
         is_bere = c3['is_green'] and c2['is_red'] and (c2['close'] <= c3['open']) and (c2['open'] >= c3['close']) and (c2['body'] > c3['body'])
+        
         c4_mid = (c4['open'] + c4['close']) / 2
         is_ms = c4['is_red'] and (c3['body'] <= (c3['high'] - c3['low']) * 0.3) and c2['is_green'] and (c2['close'] >= c4_mid)
         is_es = c4['is_green'] and (c3['body'] <= (c3['high'] - c3['low']) * 0.3) and c2['is_red'] and (c2['close'] <= c4_mid)
+
         bullish_pattern = is_hammer or is_be or is_ms
         bearish_pattern = is_shooting_star or is_bere or is_es
-        df['is_peak'] = (df['high'].shift(2) > df['high'].shift(1)) & (df['high'].shift(2) > df['high']) & (df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(4))
-        df['is_valley'] = (df['low'].shift(2) < df['low'].shift(1)) & (df['low'].shift(2) < df['low']) & (df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(4))
-        df['peak_price'] = np.where(df['is_peak'], df['high'].shift(2), np.nan)
-        df['valley_price'] = np.where(df['is_valley'], df['low'].shift(2), np.nan)
-        recent_peaks = df.tail(60)['peak_price'].dropna().values
-        recent_valleys = df.tail(60)['valley_price'].dropna().values
-        is_dt = len(recent_peaks) >= 2 and abs(recent_peaks[-1] - recent_peaks[-2]) / recent_peaks[-2] < 0.003
-        is_hs = len(recent_peaks) >= 3 and recent_peaks[-2] > recent_peaks[-1] and recent_peaks[-2] > recent_peaks[-3]
-        is_db = len(recent_valleys) >= 2 and abs(recent_valleys[-1] - recent_valleys[-2]) / recent_valleys[-2] < 0.003
-        is_ihs = len(recent_valleys) >= 3 and recent_valleys[-2] < recent_valleys[-1] and recent_valleys[-2] < recent_valleys[-3]
-        artistic_buy_pattern, artistic_sell_pattern = is_db or is_ihs, is_dt or is_hs
-        p_name, p_color, p_desc = "প্যাটার্ন নেই ➖", "#848E9C", "বিশেষ কোনো রিভার্সাল বা স্ট্রং প্যাটার্ন নেই।"
-        if is_db: p_name, p_color, p_desc = "ডাবল বটম ✌️", "#00BFFF", "চার্টে ডাবল বটম (W) প্যাটার্ন।"
-        elif is_ihs: p_name, p_color, p_desc = "ইনভার্স হেড এন্ড শোল্ডার 👤", "#00BFFF", "ইনভার্স হেড এন্ড শোল্ডার।"
-        elif is_dt: p_name, p_color, p_desc = "ডাবল টপ ⛰️", "#FF00FF", "চার্টে ডাবল টপ (M) প্যাটার্ন।"
-        elif is_hs: p_name, p_color, p_desc = "হেড এন্ড শোল্ডার 👤", "#FF00FF", "হেড এন্ড শোল্ডার।"
-        elif is_ms: p_name, p_color, p_desc = "মর্নিং স্টার 🌅", "#00FF00", "স্ট্রং বুলিশ রিভার্সাল।"
-        elif is_es: p_name, p_color, p_desc = "ইভনিং স্টার 🌃", "#FF1744", "স্ট্রং বিয়ারিশ রিভার্সাল।"
-        elif is_be: p_name, p_color, p_desc = "বুলিশ এনগালফিং 📈", "#00FF00", "বায়াররা সেলারদের গিলেছে।"
-        elif is_bere: p_name, p_color, p_desc = "বিয়ারিশ এনগালফিং 📉", "#FF1744", "সেলাররা বায়ারদের গিলেছে।"
-        elif is_hammer: p_name, p_color, p_desc = "হ্যামার 🔨", "#00FF00", "নিচে নামার পর কড়া রিজেকশন।"
-        elif is_shooting_star: p_name, p_color, p_desc = "শুটিং স্টার 🌠", "#FF1744", "উপরে ওঠার পর কড়া রিজেকশন।"
-        curr_price, curr_open, curr_vol = df['close'].iloc[-1], df['open'].iloc[-1], df['volume'].iloc[-1]
-        vol_sma = df['volume'].rolling(20).mean().iloc[-1]
-        curr_ema5, curr_ema13, curr_ema50 = df['ema_5'].iloc[-1], df['ema_13'].iloc[-1], df['ema_50'].iloc[-1]
-        closed_price, closed_ema5, closed_ema13, closed_ema50 = df['close'].iloc[-2], df['ema_5'].iloc[-2], df['ema_13'].iloc[-2], df['ema_50'].iloc[-2]
-        curr_vwap = df['vwap'].iloc[-1]
-        buyer_vol_spike = (curr_vol > (vol_sma * 1.5)) and (curr_price > curr_open)
-        seller_vol_spike = (curr_vol > (vol_sma * 1.5)) and (curr_price < curr_open)
+
+        # Calculate ATR
         df['prev_close'] = df['close'].shift(1)
         df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
         atr = df['tr'].rolling(14).mean().iloc[-1]
+
+        # 📌 4. HARDCORE PATTERN DETECTION (ATR Dynamic Tolerance)
+        df['is_peak'] = (df['high'].shift(2) > df['high'].shift(1)) & (df['high'].shift(2) > df['high']) & (df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(4))
+        df['is_valley'] = (df['low'].shift(2) < df['low'].shift(1)) & (df['low'].shift(2) < df['low']) & (df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(4))
+        
+        df['peak_price'] = np.where(df['is_peak'], df['high'].shift(2), np.nan)
+        df['valley_price'] = np.where(df['is_valley'], df['low'].shift(2), np.nan)
+        
+        recent_peaks_s = df['peak_price'].tail(60).dropna()
+        recent_valleys_s = df['valley_price'].tail(60).dropna()
+        
+        curr_idx = df.index[-1]
+        is_dt = False
+        is_hs = False
+        is_db = False
+        is_ihs = False
+        
+        dyn_tol = atr * 0.5  # Dynamic ATR Tolerance for Pattern
+
+        if len(recent_peaks_s) >= 2:
+            last_peak_idx = recent_peaks_s.index[-1]
+            recent_peaks = recent_peaks_s.values
+            if (curr_idx - last_peak_idx) <= 5:
+                if abs(recent_peaks[-1] - recent_peaks[-2]) <= dyn_tol:
+                    is_dt = True
+                if len(recent_peaks) >= 3:
+                    if (recent_peaks[-2] > recent_peaks[-1]) and (recent_peaks[-2] > recent_peaks[-3]):
+                        is_hs = True
+
+        if len(recent_valleys_s) >= 2:
+            last_valley_idx = recent_valleys_s.index[-1]
+            recent_valleys = recent_valleys_s.values
+            if (curr_idx - last_valley_idx) <= 5:
+                if abs(recent_valleys[-1] - recent_valleys[-2]) <= dyn_tol:
+                    is_db = True
+                if len(recent_valleys) >= 3:
+                    if (recent_valleys[-2] < recent_valleys[-1]) and (recent_valleys[-2] < recent_valleys[-3]):
+                        is_ihs = True
+
+        artistic_buy_pattern = False
+        if is_db or is_ihs:
+            artistic_buy_pattern = True
+            
+        artistic_sell_pattern = False
+        if is_dt or is_hs:
+            artistic_sell_pattern = True
+
+        p_name = "প্যাটার্ন নেই ➖"
+        p_color = "#848E9C"
+        
+        if is_db:
+            p_name = "ডাবল বটম ✌️"
+            p_color = "#00BFFF"
+        elif is_ihs:
+            p_name = "ইনভার্স হেড এন্ড শোল্ডার 👤"
+            p_color = "#00BFFF"
+        elif is_dt:
+            p_name = "ডাবল টপ ⛰️"
+            p_color = "#FF00FF"
+        elif is_hs:
+            p_name = "হেড এন্ড শোল্ডার 👤"
+            p_color = "#FF00FF"
+        elif is_ms:
+            p_name = "মর্নিং স্টার 🌅"
+            p_color = "#00FF00"
+        elif is_es:
+            p_name = "ইভনিং স্টার 🌃"
+            p_color = "#FF1744"
+        elif is_be:
+            p_name = "বুলিশ এনগালফিং 📈"
+            p_color = "#00FF00"
+        elif is_bere:
+            p_name = "বিয়ারিশ এনগালফিং 📉"
+            p_color = "#FF1744"
+        elif is_hammer:
+            p_name = "হ্যামার 🔨"
+            p_color = "#00FF00"
+        elif is_shooting_star:
+            p_name = "শুটিং স্টার 🌠"
+            p_color = "#FF1744"
+
+        curr_price = df['close'].iloc[-1]
+        curr_open = df['open'].iloc[-1]
+        curr_vol = df['volume'].iloc[-1]
+        vol_sma = df['volume'].rolling(20).mean().iloc[-1]
+        
+        curr_ema5 = df['ema_5'].iloc[-1]
+        curr_ema13 = df['ema_13'].iloc[-1]
+        curr_ema50 = df['ema_50'].iloc[-1]
+        
+        closed_price = df['close'].iloc[-2]
+        closed_ema5 = df['ema_5'].iloc[-2]
+        closed_ema13 = df['ema_13'].iloc[-2]
+        closed_ema50 = df['ema_50'].iloc[-2]
+        curr_vwap = df['vwap'].iloc[-1]
+        
+        buyer_vol_spike = False
+        seller_vol_spike = False
+        if curr_vol > (vol_sma * 1.5):
+            if curr_price > curr_open:
+                buyer_vol_spike = True
+            elif curr_price < curr_open:
+                seller_vol_spike = True
+                
         is_choppy = atr < (curr_price * 0.001) 
         swing_low = df['low'].tail(15).min()
         swing_high = df['high'].tail(15).max()
+        
         trend_up = closed_price > closed_ema50
         momentum_bullish = closed_ema5 > closed_ema13
+        
         signal_type = "NORMAL"
-        if is_choppy: signal_type = "CHOPPY MARKET"
-        elif artistic_buy_pattern: signal_type = "ARTISTIC SIGNAL BUY"
-        elif artistic_sell_pattern: signal_type = "ARTISTIC SIGNAL SELL"
-        elif trend_up and mtf_15m_trend_up and curr_price > curr_vwap and momentum_bullish and (bullish_pattern or buyer_vol_spike) and rsi_closed < 70: signal_type = "STRONG BUY"
-        elif not trend_up and not mtf_15m_trend_up and curr_price < curr_vwap and not momentum_bullish and (bearish_pattern or seller_vol_spike) and rsi_closed > 30: signal_type = "STRONG SELL"
+        if is_choppy:
+            signal_type = "CHOPPY MARKET"
+        elif artistic_buy_pattern:
+            signal_type = "ARTISTIC SIGNAL BUY"
+        elif artistic_sell_pattern:
+            signal_type = "ARTISTIC SIGNAL SELL"
+        elif trend_up and mtf_15m_trend_up and (curr_price > curr_vwap) and momentum_bullish and (bullish_pattern or buyer_vol_spike) and (rsi_closed < 70):
+            signal_type = "STRONG BUY"
+        elif not trend_up and not mtf_15m_trend_up and (curr_price < curr_vwap) and not momentum_bullish and (bearish_pattern or seller_vol_spike) and (rsi_closed > 30):
+            signal_type = "STRONG SELL"
+            
         return {
             'price': curr_price, 'signal': signal_type, 'rsi': rsi_live, 'curr_vol': curr_vol, 'vol_sma': vol_sma,
             'ema5': curr_ema5, 'ema13': curr_ema13, 'ema50': curr_ema50, 'vwap': curr_vwap, 'mtf_up': mtf_15m_trend_up, 
             'is_choppy': is_choppy, 'support': support_level, 'resistance': resistance_level, 'p_name': p_name, 
-            'p_desc': p_desc, 'p_color': p_color, 'buyer_vol_spike': buyer_vol_spike, 'seller_vol_spike': seller_vol_spike, 
-            'trend_up': curr_price > curr_ema50, 'momentum_bullish': curr_ema5 > curr_ema13, 'atr': atr, 
+            'p_color': p_color, 'buyer_vol_spike': buyer_vol_spike, 'seller_vol_spike': seller_vol_spike, 
+            'trend_up': trend_up, 'momentum_bullish': momentum_bullish, 'atr': atr, 
             'swing_low': swing_low, 'swing_high': swing_high
         }
-    except Exception: return None
+    except Exception:
+        return None
 
-all_data = {coin: fetch_and_analyze(coin) for coin in SCALPING_COINS if fetch_and_analyze(coin) is not None}
+all_data = {}
+for coin in SCALPING_COINS:
+    res = fetch_and_analyze(coin)
+    if res is not None:
+        all_data[coin] = res
 
+# ================= 🚨 5. GLOBAL SIGNAL RADAR UI =================
 st.markdown("<h3 style='color:#FCD535;'>🚨 স্ক্যাল্পিং মাস্টার লাইভ রাডার (5m)</h3>", unsafe_allow_html=True)
+
 tc1, tc2 = st.columns([1, 4])
 with tc1:
     live_status = st.toggle("🔴 লাইভ স্ক্যানার অন/অফ", value=st.session_state.live_mode)
@@ -135,24 +263,51 @@ with tc1:
         st.session_state.live_mode = live_status
         st.rerun()
 with tc2:
-    if st.session_state.live_mode: st.markdown("<p style='color:#00FF00; font-size:14px; margin-top:8px;'>✅ লাইভ মোড অ্যাক্টিভ! অটোমেটিক ১০ সেকেন্ড পর পর আপডেট হচ্ছে।</p>", unsafe_allow_html=True)
-    else: st.markdown("<p style='color:#848E9C; font-size:14px; margin-top:8px;'>⏸️ লাইভ মোড অফ করা আছে। (API বাঁচাতে ট্রেড না করলে অফ রাখুন)</p>", unsafe_allow_html=True)
+    if st.session_state.live_mode:
+        st.markdown("<p style='color:#00FF00; font-size:14px; margin-top:8px;'>✅ লাইভ মোড অ্যাক্টিভ! অটোমেটিক ১০ সেকেন্ড পর পর আপডেট হচ্ছে।</p>", unsafe_allow_html=True)
+    else:
+        st.markdown("<p style='color:#848E9C; font-size:14px; margin-top:8px;'>⏸️ লাইভ মোড অফ করা আছে। (API বাঁচাতে ট্রেড না করলে অফ রাখুন)</p>", unsafe_allow_html=True)
 
 active_signals = 0
 for coin, data in all_data.items():
     if data['signal'] in ["STRONG BUY", "STRONG SELL", "ARTISTIC SIGNAL BUY", "ARTISTIC SIGNAL SELL"]:
         active_signals += 1
-        is_buy = data['signal'] in ["STRONG BUY", "ARTISTIC SIGNAL BUY"]
-        if data['signal'] == "ARTISTIC SIGNAL BUY": cc, cm, ic = "global-alert-artistic-buy", "#00BFFF", "🎨 আর্টিস্টিক বাই"
-        elif data['signal'] == "ARTISTIC SIGNAL SELL": cc, cm, ic = "global-alert-artistic-sell", "#FF00FF", "🎨 আর্টিস্টিক সেল"
-        elif data['signal'] == "STRONG BUY": cc, cm, ic = "global-alert-buy", "#00FF00", "🚀 STRONG BUY"
-        elif data['signal'] == "STRONG SELL": cc, cm, ic = "global-alert-sell", "#FF1744", "🧨 STRONG SELL"
+        is_buy = False
+        
+        if data['signal'] == "ARTISTIC SIGNAL BUY":
+            cc = "global-alert-artistic-buy"
+            cm = "#00BFFF"
+            ic = "🎨 আর্টিস্টিক বাই"
+            is_buy = True
+        elif data['signal'] == "ARTISTIC SIGNAL SELL":
+            cc = "global-alert-artistic-sell"
+            cm = "#FF00FF"
+            ic = "🎨 আর্টিস্টিক সেল"
+        elif data['signal'] == "STRONG BUY":
+            cc = "global-alert-buy"
+            cm = "#00FF00"
+            ic = "🚀 STRONG BUY"
+            is_buy = True
+        elif data['signal'] == "STRONG SELL":
+            cc = "global-alert-sell"
+            cm = "#FF1744"
+            ic = "🧨 STRONG SELL"
         
         fee_m = data['price'] * 0.002 
-        sl = data['swing_low'] if (is_buy and data['swing_low'] < data['price']) else data['price'] - (data['atr'] * 1.5) if is_buy else data['swing_high'] if data['swing_high'] > data['price'] else data['price'] + (data['atr'] * 1.5)
-        tp = data['price'] + ((data['price'] - sl) * 1.5) + fee_m if is_buy else data['price'] - ((sl - data['price']) * 1.5) - fee_m
         
-        # 📌 UI Fix Applied Here (No columns inside div)
+        if is_buy:
+            if data['swing_low'] < data['price']:
+                sl = data['swing_low']
+            else:
+                sl = data['price'] - (data['atr'] * 1.5)
+            tp = data['price'] + ((data['price'] - sl) * 1.5) + fee_m
+        else:
+            if data['swing_high'] > data['price']:
+                sl = data['swing_high']
+            else:
+                sl = data['price'] + (data['atr'] * 1.5)
+            tp = data['price'] - ((sl - data['price']) * 1.5) - fee_m
+        
         html_card = f"""
         <div class='{cc}'>
             <h3 style='color:{cm}; margin:0 0 10px 0;'>{ic}: {coin}</h3>
@@ -169,11 +324,15 @@ for coin, data in all_data.items():
         st.markdown(html_card, unsafe_allow_html=True)
         st.button(f"🔍 {coin} চার্ট দেখুন", key=f"btn_{coin}", on_click=change_active_coin, args=(coin,))
 
-if active_signals == 0: st.markdown("<div class='global-alert-normal'>⏳ বর্তমানে কোনো কয়েনে সিগন্যাল নেই। মাস্টার বট মার্কেট ফিল্টার করছে...</div>", unsafe_allow_html=True)
+if active_signals == 0:
+    st.markdown("<div class='global-alert-normal'>⏳ বর্তমানে কোনো কয়েনে সিগন্যাল নেই। মাস্টার বট মার্কেট ফিল্টার করছে...</div>", unsafe_allow_html=True)
+    
 st.markdown("<hr style='border-color:#2B3139;'>", unsafe_allow_html=True)
 
+# ================= 📚 6. DETAILED MASTER DASHBOARD =================
 ca, cb = st.columns([3, 1])
-with ca: st.markdown(f"<h3 style='color:#EAECEF; margin:0;'>🔍 {st.session_state.active_coin} প্রো অ্যানালাইসিস</h3>", unsafe_allow_html=True)
+with ca:
+    st.markdown(f"<h3 style='color:#EAECEF; margin:0;'>🔍 {st.session_state.active_coin} প্রো অ্যানালাইসিস</h3>", unsafe_allow_html=True)
 with cb:
     selected = st.selectbox("📊 ম্যানুয়াল সিলেকশন", SCALPING_COINS, index=SCALPING_COINS.index(st.session_state.active_coin))
     if selected != st.session_state.active_coin:
@@ -182,63 +341,54 @@ with cb:
 
 if st.session_state.active_coin in all_data:
     d = all_data[st.session_state.active_coin]
+    
     mc1, mc2, mc3, mc4 = st.columns(4)
-    tv, tc = ("আপ-ট্রেন্ড", "#00FF00") if d['trend_up'] else ("ডাউন-ট্রেন্ড", "#FF1744")
-    with mc1: st.markdown(f"<div class='metric-card' style='border-color:{tc}'><div class='metric-title'>১. 5m ট্রেন্ড</div><div class='metric-value' style='color:{tc}'>{tv}</div></div>", unsafe_allow_html=True)
-    mtv, mtc = ("আপ-ট্রেন্ড", "#00FF00") if d['mtf_up'] else ("ডাউন-ট্রেন্ড", "#FF1744")
-    with mc2: st.markdown(f"<div class='metric-card' style='border-color:{mtc}'><div class='metric-title'>২. 15m বড় ট্রেন্ড</div><div class='metric-value' style='color:{mtc}'>{mtv}</div></div>", unsafe_allow_html=True)
-    vv, vc = ("VWAP এর উপরে 🟢", "#00FF00") if d['price'] > d['vwap'] else ("VWAP এর নিচে 🔴", "#FF1744")
-    with mc3: st.markdown(f"<div class='metric-card' style='border-color:{vc}'><div class='metric-title'>৩. VWAP</div><div class='metric-value' style='color:{vc}'>{vv}</div></div>", unsafe_allow_html=True)
-    with mc4: st.markdown(f"<div class='metric-card' style='border-color:{d['p_color']}'><div class='metric-title'>৪. স্ক্যানার</div><div class='metric-value' style='color:{d['p_color']}'>{d['p_name']}</div></div>", unsafe_allow_html=True)
+    if d['trend_up']:
+        tv, tc = "আপ-ট্রেন্ড", "#00FF00"
+    else:
+        tv, tc = "ডাউন-ট্রেন্ড", "#FF1744"
+    with mc1:
+        st.markdown(f"<div class='metric-card' style='border-color:{tc}'><div class='metric-title'>১. 5m ট্রেন্ড</div><div class='metric-value' style='color:{tc}'>{tv}</div></div>", unsafe_allow_html=True)
+    
+    if d['mtf_up']:
+        mtv, mtc = "আপ-ট্রেন্ড", "#00FF00"
+    else:
+        mtv, mtc = "ডাউন-ট্রেন্ড", "#FF1744"
+    with mc2:
+        st.markdown(f"<div class='metric-card' style='border-color:{mtc}'><div class='metric-title'>২. 15m বড় ট্রেন্ড</div><div class='metric-value' style='color:{mtc}'>{mtv}</div></div>", unsafe_allow_html=True)
+    
+    if d['price'] > d['vwap']:
+        vv, vc = "VWAP এর উপরে 🟢", "#00FF00"
+    else:
+        vv, vc = "VWAP এর নিচে 🔴", "#FF1744"
+    with mc3:
+        st.markdown(f"<div class='metric-card' style='border-color:{vc}'><div class='metric-title'>৩. VWAP</div><div class='metric-value' style='color:{vc}'>{vv}</div></div>", unsafe_allow_html=True)
+    
+    with mc4:
+        st.markdown(f"<div class='metric-card' style='border-color:{d['p_color']}'><div class='metric-title'>৪. স্ক্যানার</div><div class='metric-value' style='color:{d['p_color']}'>{d['p_name']}</div></div>", unsafe_allow_html=True)
     
     mc5, mc6, mc7, mc8 = st.columns(4)
-    mv, mc_c = ("বায়াররা স্ট্রং 🟢", "#00FF00") if d['momentum_bullish'] else ("সেলাররা স্ট্রং 🔴", "#FF1744")
-    with mc5: st.markdown(f"<div class='metric-card' style='border-color:{mc_c}'><div class='metric-title'>৫. মোমেন্টাম</div><div class='metric-value' style='color:{mc_c}'>{mv}</div></div>", unsafe_allow_html=True)
-    with mc6: st.markdown(f"<div class='metric-card' style='border-color:#00BFFF'><div class='metric-title'>৬. সাপোর্ট</div><div class='metric-value' style='color:#00BFFF'>{d['support']:.4f}</div></div>", unsafe_allow_html=True)
-    with mc7: st.markdown(f"<div class='metric-card' style='border-color:#FF00FF'><div class='metric-title'>৭. রেজিস্ট্যান্স</div><div class='metric-value' style='color:#FF00FF'>{d['resistance']:.4f}</div></div>", unsafe_allow_html=True)
-    ch_v, ch_c = ("ডেড মার্কেট 😴", "#848E9C") if d['is_choppy'] else ("মার্কেট রানিং ⚡", "#FCD535")
-    with mc8: st.markdown(f"<div class='metric-card' style='border-color:{ch_c}'><div class='metric-title'>৮. কন্ডিশন</div><div class='metric-value' style='color:{ch_c}'>{ch_v}</div></div>", unsafe_allow_html=True)
+    if d['momentum_bullish']:
+        mv, mc_c = "বায়াররা স্ট্রং 🟢", "#00FF00"
+    else:
+        mv, mc_c = "সেলাররা স্ট্রং 🔴", "#FF1744"
+    with mc5:
+        st.markdown(f"<div class='metric-card' style='border-color:{mc_c}'><div class='metric-title'>৫. মোমেন্টাম</div><div class='metric-value' style='color:{mc_c}'>{mv}</div></div>", unsafe_allow_html=True)
+    
+    with mc6:
+        st.markdown(f"<div class='metric-card' style='border-color:#00BFFF'><div class='metric-title'>৬. রিয়েল সাপোর্ট</div><div class='metric-value' style='color:#00BFFF'>{d['support']:.4f}</div></div>", unsafe_allow_html=True)
+    
+    with mc7:
+        st.markdown(f"<div class='metric-card' style='border-color:#FF00FF'><div class='metric-title'>৭. রিয়েল রেজিস্ট্যান্স</div><div class='metric-value' style='color:#FF00FF'>{d['resistance']:.4f}</div></div>", unsafe_allow_html=True)
+    
+    if d['is_choppy']:
+        ch_v, ch_c = "ডেড মার্কেট 😴", "#848E9C"
+    else:
+        ch_v, ch_c = "মার্কেট রানিং ⚡", "#FCD535"
+    with mc8:
+        st.markdown(f"<div class='metric-card' style='border-color:{ch_c}'><div class='metric-title'>৮. কন্ডিশন</div><div class='metric-value' style='color:{ch_c}'>{ch_v}</div></div>", unsafe_allow_html=True)
 
     st.markdown(f"<h4 style='color:#FCD535; margin-top:15px; border-bottom: 1px solid #2B3139; padding-bottom:10px;'>💡 {st.session_state.active_coin} মাস্টার ব্রেকডাউন</h4>", unsafe_allow_html=True)
     
     if d['signal'] == "CHOPPY MARKET":
-        st.markdown("""<div class='reason-box' style='border-left-color: #848E9C;'><b>মার্কেট ডেড!</b><br>স্ক্যাল্পিংয়ের জন্য এন্ট্রি নিলে লস হওয়ার চান্স বেশি। ভলিউম আসার অপেক্ষা করুন।</div>""", unsafe_allow_html=True)
-    elif d['signal'] == "ARTISTIC SIGNAL BUY":
-        st.markdown(f"""<div class='reason-box' style='border-left-color: #00BFFF;'><b>ARTISTIC BUY কেন আসলো?</b><br>চার্টে <b>{d['p_name']}</b> প্যাটার্ন তৈরি হয়েছে। এটি অনেক নির্ভরযোগ্য।</div>""", unsafe_allow_html=True)
-    elif d['signal'] == "ARTISTIC SIGNAL SELL":
-        st.markdown(f"""<div class='reason-box' style='border-left-color: #FF00FF;'><b>ARTISTIC SELL কেন আসলো?</b><br>চার্টে <b>{d['p_name']}</b> প্যাটার্ন তৈরি হয়েছে। এটি অনেক নির্ভরযোগ্য।</div>""", unsafe_allow_html=True)
-    elif d['signal'] == "STRONG BUY":
-        st.markdown("""<div class='reason-box'><b>STRONG BUY সিগন্যাল কেন?</b><br>MTF আপ, প্রাইস VWAP এর উপরে, 5m আপ-ট্রেন্ড এবং মোমেন্টাম বুলিশ। ফী হিসাব করে টার্গেট দেওয়া হয়েছে।</div>""", unsafe_allow_html=True)
-    elif d['signal'] == "STRONG SELL":
-        st.markdown("""<div class='reason-box'><b>STRONG SELL সিগন্যাল কেন?</b><br>MTF ডাউন, প্রাইস VWAP এর নিচে, 5m ডাউন-ট্রেন্ড এবং মোমেন্টাম বিয়ারিশ। ফী হিসাব করে টার্গেট দেওয়া হয়েছে।</div>""", unsafe_allow_html=True)
-    else:
-        st.markdown(f"""<div class='reason-box' style='border-left-color: #848E9C;'><b>{st.session_state.active_coin} এ কোনো সিগন্যাল নেই।</b><br>সবগুলো কন্ডিশন একসাথে না মিললে স্ক্যাল্পিংয়ে এন্ট্রি নেওয়া রিস্কি।</div>""", unsafe_allow_html=True)
-
-    st.markdown(f"<h4 style='color:#00BFFF; margin-top:20px;'>📊 লাইভ প্যারামিটার ও ড্যাশবোর্ড</h4>", unsafe_allow_html=True)
-    lc1, lc2 = st.columns(2)
-    with lc1:
-        st.markdown(f"""
-        <div class='learning-box'>
-        <b style='color:#FCD535;'>📌 বর্তমান টেকনিক্যাল নাম্বার</b><br>
-        🔹 বর্তমান প্রাইস: {d['price']:.4f}<br>
-        🔹 VWAP: {d['vwap']:.4f}<br>
-        🔹 EMA 50: {d['ema50']:.4f}<br>
-        🔹 RSI (14): {d['rsi']:.2f}<br>
-        🔹 ভলাটিলিটি (ATR): {d['atr']:.4f}
-        </div>
-        """, unsafe_allow_html=True)
-    with lc2:
-        mtf_status = 'বুলিশ 🟢' if d['mtf_up'] else 'বিয়ারিশ 🔴'
-        vwap_status = 'উপরে 🟢' if d['price'] > d['vwap'] else 'নিচে 🔴'
-        mom_status = 'Bullish 🟢' if d['momentum_bullish'] else 'Bearish 🔴'
-        chop_status = 'ডেড 🔴' if d['is_choppy'] else 'ভলিউম আছে 🟢'
-        st.markdown(f"""
-        <div class='learning-box'>
-        <b style='color:#00FF00;'>💡 মাস্টার কন্ডিশন স্ট্যাটাস</b><br>
-        ✅ MTF 15m ট্রেন্ড: {mtf_status}<br>
-        ✅ VWAP লজিক: {vwap_status}<br>
-        ✅ 5m মোমেন্টাম: {mom_status}<br>
-        ✅ মার্কেট অবস্থা: {chop_status}<br>
-        ✅ প্যাটার্ন: {d['p_name']}
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div class='reason-box' style='border-left-color: #848E9C;'><b>মার্কেট ডেড!</b><br>স্ক্যাল্পিংয়ের জন্য এন্ট্রি নিলে লস হওয়ার চান্স বেশি। ভলিউম আসার অপেক্ষা করুন।</div>""", unsa
