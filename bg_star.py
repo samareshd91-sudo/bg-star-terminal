@@ -305,7 +305,7 @@ for coin, data in all_data.items():
         st.button(f"🔍 {coin} চার্ট দেখুন", key=f"btn_{coin}", on_click=change_active_coin, args=(coin,))
 
 if active_signals == 0:
-    msg = "<div class='global-alert-normal'>⏳ বর্তমানে কোনো কয়েনে সিগন্যাল নেই। মাস্টার বট মার্কেট ফিল্টার করছে...</div>"
+    msg = "<div class='global-alert-normal'>⏳ বর্তমানে কোনো কয়েনে সিগন্যাল নেই। মাস্টার বট মার্কেট ফিল্টার করছে...</div>"
     st.markdown(msg, unsafe_allow_html=True)
     
 st.markdown("<hr style='border-color:#2B3139;'>", unsafe_allow_html=True)
@@ -317,7 +317,7 @@ with ca:
     st.markdown(title_msg, unsafe_allow_html=True)
 with cb:
     selected = st.selectbox(
-        "📊 ম্যানুয়াল সিলেকশন", 
+        "📊 ম্যানুয়াল সিলেকশন", 
         SCALPING_COINS, 
         index=SCALPING_COINS.index(st.session_state.active_coin)
     )
@@ -338,7 +338,7 @@ if st.session_state.active_coin in all_data:
     if d['mtf_up']: mtv, mtc = "আপ-ট্রেন্ড", "#00FF00"
     else: mtv, mtc = "ডাউন-ট্রেন্ড", "#FF1744"
     with mc2:
-        msg2 = f"<div class='metric-card' style='border-color:{mtc}'><div class='metric-title'>২. 15m বড় ট্রেন্ড</div><div class='metric-value' style='color:{mtc}'>{mtv}</div></div>"
+        msg2 = f"<div class='metric-card' style='border-color:{mtc}'><div class='metric-title'>২. 15m বড় ট্রেন্ড</div><div class='metric-value' style='color:{mtc}'>{mtv}</div></div>"
         st.markdown(msg2, unsafe_allow_html=True)
     
     if d['price'] > d['vwap']: vv, vc = "VWAP এর উপরে 🟢", "#00FF00"
@@ -352,18 +352,18 @@ if st.session_state.active_coin in all_data:
         st.markdown(msg4, unsafe_allow_html=True)
     
     mc5, mc6, mc7, mc8 = st.columns(4)
-    if d['momentum_bullish']: mv, mc_c = "বায়াররা স্ট্রং 🟢", "#00FF00"
+    if d['momentum_bullish']: mv, mc_c = "বায়াররা স্ট্রং 🟢", "#00FF00"
     else: mv, mc_c = "সেলাররা স্ট্রং 🔴", "#FF1744"
     with mc5:
         msg5 = f"<div class='metric-card' style='border-color:{mc_c}'><div class='metric-title'>৫. মোমেন্টাম</div><div class='metric-value' style='color:{mc_c}'>{mv}</div></div>"
         st.markdown(msg5, unsafe_allow_html=True)
     
     with mc6:
-        msg6 = f"<div class='metric-card' style='border-color:#00BFFF'><div class='metric-title'>৬. রিয়েল সাপোর্ট</div><div class='metric-value' style='color:#00BFFF'>{d['support']:.4f}</div></div>"
+        msg6 = f"<div class='metric-card' style='border-color:#00BFFF'><div class='metric-title'>৬. রিয়েল সাপোর্ট</div><div class='metric-value' style='color:#00BFFF'>{d['support']:.4f}</div></div>"
         st.markdown(msg6, unsafe_allow_html=True)
     
     with mc7:
-        msg7 = f"<div class='metric-card' style='border-color:#FF00FF'><div class='metric-title'>৭. রিয়েল রেজিস্ট্যান্স</div><div class='metric-value' style='color:#FF00FF'>{d['resistance']:.4f}</div></div>"
+        msg7 = f"<div class='metric-card' style='border-color:#FF00FF'><div class='metric-title'>৭. রিয়েল রেজিস্ট্যান্স</div><div class='metric-value' style='color:#FF00FF'>{d['resistance']:.4f}</div></div>"
         st.markdown(msg7, unsafe_allow_html=True)
     
     if d['is_choppy']: ch_v, ch_c = "ডেড মার্কেট 😴", "#848E9C"
@@ -380,74 +380,82 @@ if st.session_state.active_coin in all_data:
         r_msg = (
             "<div class='reason-box' style='border-left-color: #848E9C;'>"
             "<b>মার্কেট ডেড!</b><br>"
-            "স্ক্যাল্পিংয়ের জন্য এন্ট্রি নিলে লস হওয়ার চান্স বেশি। ভলিউম আসার অপেক্ষা করুন।"
+            "স্ক্যাল্পিংয়ের জন্য এন্ট্রি নিলে লস হওয়ার চান্স বেশি। ভলিউম আসার অপেক্ষা করুন।"
             "</div>"
         )
         st.markdown(r_msg, unsafe_allow_html=True)
-        
     elif d['signal'] == "ARTISTIC SIGNAL BUY":
         r_msg = (
             f"<div class='reason-box' style='border-left-color: #00BFFF;'>"
             f"<b>ARTISTIC BUY কেন আসলো?</b><br>"
-            f"চার্টে <b>{d['p_name']}</b> তৈরি হয়েছে যা একটি শক্তিশালী বুলিশ রিভার্সাল প্যাটার্ন। "
-            f"সাপোর্ট লেভেল ({d['support']:.4f}) থেকে মার্কেট বাউন্স করার সম্ভাবনা রয়েছে।"
+            f"চার্টে <b>{d['p_name']}</b> তৈরি হয়েছে। প্যাটার্নটি একদম তাজা হওয়ায় বট সিগন্যাল দিয়েছে।"
             f"</div>"
         )
         st.markdown(r_msg, unsafe_allow_html=True)
-
     elif d['signal'] == "ARTISTIC SIGNAL SELL":
         r_msg = (
             f"<div class='reason-box' style='border-left-color: #FF00FF;'>"
             f"<b>ARTISTIC SELL কেন আসলো?</b><br>"
-            f"চার্টে <b>{d['p_name']}</b> তৈরি হয়েছে যা একটি শক্তিশালী বিয়ারিশ রিভার্সাল প্যাটার্ন। "
-            f"রেজিস্ট্যান্স লেভেল ({d['resistance']:.4f}) থেকে মার্কেট রিজেকশন পাচ্ছে।"
+            f"চার্টে <b>{d['p_name']}</b> তৈরি হয়েছে। প্যাটার্নটি একদম তাজা হওয়ায় বট সিগন্যাল দিয়েছে।"
             f"</div>"
         )
         st.markdown(r_msg, unsafe_allow_html=True)
-
     elif d['signal'] == "STRONG BUY":
         r_msg = (
-            f"<div class='reason-box' style='border-left-color: #00FF00;'>"
-            f"<b>STRONG BUY কেন আসলো?</b><br>"
-            f"১. প্রাইস 15m এবং 5m উভয় টাইমফ্রেমে আপ-ট্রেন্ডে আছে।<br>"
-            f"২. প্রাইস VWAP ({d['vwap']:.4f}) এর উপরে অবস্থান করছে।<br>"
-            f"৩. মোমেন্টাম স্ট্রং (EMA5 > EMA13)।<br>"
-            f"৪. <b>{d['p_name']}</b> প্যাটার্ন অথবা বায়ার ভলিউম স্পাইক কনফার্মেশন দিয়েছে।"
-            f"</div>"
-        )
-        st.markdown(r_msg, unsafe_allow_html=True)
-
-    elif d['signal'] == "STRONG SELL":
-        r_msg = (
-            f"<div class='reason-box' style='border-left-color: #FF1744;'>"
-            f"<b>STRONG SELL কেন আসলো?</b><br>"
-            f"১. প্রাইস 15m এবং 5m উভয় টাইমফ্রেমে ডাউন-ট্রেন্ডে আছে।<br>"
-            f"২. প্রাইস VWAP ({d['vwap']:.4f}) এর নিচে অবস্থান করছে।<br>"
-            f"৩. মোমেন্টাম দুর্বল (EMA5 < EMA13)।<br>"
-            f"৪. <b>{d['p_name']}</b> প্যাটার্ন অথবা সেলার ভলিউম স্পাইক কনফার্মেশন দিয়েছে।"
-            f"</div>"
-        )
-        st.markdown(r_msg, unsafe_allow_html=True)
-
-    else:
-        r_msg = (
-            "<div class='reason-box' style='border-left-color: #848E9C;'>"
-            "<b>বর্তমান পরিস্থিতি:</b><br>"
-            "এখনো কোনো স্ট্রং সিগন্যাল তৈরি হয়নি। স্ক্যাল্পিংয়ের জন্য একটি পারফেক্ট সেটআপের অপেক্ষা করুন।"
+            "<div class='reason-box'>"
+            "<b>STRONG BUY সিগন্যাল কেন?</b><br>"
+            "MTF আপ, প্রাইস VWAP এর উপরে, 5m আপ-ট্রেন্ড এবং মোমেন্টাম বুলিশ। ফী হিসাব করে টার্গেট দেওয়া হয়েছে।"
             "</div>"
         )
         st.markdown(r_msg, unsafe_allow_html=True)
+    elif d['signal'] == "STRONG SELL":
+        r_msg = (
+            "<div class='reason-box'>"
+            "<b>STRONG SELL সিগন্যাল কেন?</b><br>"
+            "MTF ডাউন, প্রাইস VWAP এর নিচে, 5m ডাউন-ট্রেন্ড এবং মোমেন্টাম বিয়ারিশ। ফী হিসাব করে টার্গেট দেওয়া হয়েছে।"
+            "</div>"
+        )
+        st.markdown(r_msg, unsafe_allow_html=True)
+    else:
+        r_msg = (
+            f"<div class='reason-box' style='border-left-color: #848E9C;'>"
+            f"<b>{st.session_state.active_coin} এ কোনো সিগন্যাল নেই।</b><br>"
+            f"সবগুলো কন্ডিশন একসাথে না মিললে স্ক্যাল্পিংয়ে এন্ট্রি নেওয়া রিস্কি।"
+            f"</div>"
+        )
+        st.markdown(r_msg, unsafe_allow_html=True)
 
-    # ================= 📖 7. LEARNING & RULES SECTION =================
-    learning_msg = (
-        "<div class='learning-box'>"
-        "<h4 style='margin-top:0; color:#FCD535;'>💡 প্রো ট্রেডিং টিপস:</h4>"
-        "<ul>"
-        "<li><b>স্টপ-লস (SL):</b> কখনোই স্টপ-লস ছাড়া স্ক্যাল্পিং করবেন না। মার্কেট যেকোনো সময় রিভার্স করতে পারে।</li>"
-        "<li><b>রিস্ক ম্যানেজমেন্ট:</b> এক ট্রেডে পোর্টফোলিও-র ২-৩% এর বেশি রিস্ক নেবেন না।</li>"
-        "<li><b>রিওয়ার্ড রেশিও:</b> সব সময় ১:১.৫ বা তার বেশি টার্গেট (TP) মেইনটেইন করার চেষ্টা করুন।</li>"
-        "<li><b>ইমোশনাল কন্ট্রোল:</b> সিগন্যাল মিস হলে তাড়াহুড়ো করে রানিং ক্যান্ডেলে এন্ট্রি নেবেন না।</li>"
-        "</ul>"
-        "</div>"
-    )
-    st.markdown(learning_msg, unsafe_allow_html=True)
+    header_dash = "<h4 style='color:#00BFFF; margin-top:20px;'>📊 লাইভ প্যারামিটার ও ড্যাশবোর্ড</h4>"
+    st.markdown(header_dash, unsafe_allow_html=True)
+    
+    lc1, lc2 = st.columns(2)
+    with lc1:
+        l_msg1 = (
+            "<div class='learning-box'>"
+            "<b style='color:#FCD535;'>📌 বর্তমান টেকনিক্যাল নাম্বার</b><br>"
+            f"🔹 বর্তমান প্রাইস: {d['price']:.4f}<br>"
+            f"🔹 VWAP: {d['vwap']:.4f}<br>"
+            f"🔹 EMA 50: {d['ema50']:.4f}<br>"
+            f"🔹 RSI (14): {d['rsi']:.2f}<br>"
+            f"🔹 ভলাটিলিটি (ATR): {d['atr']:.4f}"
+            "</div>"
+        )
+        st.markdown(l_msg1, unsafe_allow_html=True)
+        
+    with lc2:
+        mtf_status = 'বুলিশ 🟢' if d['mtf_up'] else 'বিয়ারিশ 🔴'
+        vwap_status = 'উপরে 🟢' if d['price'] > d['vwap'] else 'নিচে 🔴'
+        mom_status = 'Bullish 🟢' if d['momentum_bullish'] else 'Bearish 🔴'
+        chop_status = 'ডেড 🔴' if d['is_choppy'] else 'ভলিউম আছে 🟢'
+        
+        l_msg2 = (
+            "<div class='learning-box'>"
+            "<b style='color:#00FF00;'>💡 মাস্টার কন্ডিশন স্ট্যাটাস</b><br>"
+            f"✅ MTF 15m ট্রেন্ড: {mtf_status}<br>"
+            f"✅ VWAP লজিক: {vwap_status}<br>"
+            f"✅ 5m মোমেন্টাম: {mom_status}<br>"
+            f"✅ মার্কেট অবস্থা: {chop_status}<br>"
+            f"✅ প্যাটার্ন: {d['p_name']}"
+            "</div>"
+        )
+        st.markdown(l_msg2, unsafe_allow_html=True)
