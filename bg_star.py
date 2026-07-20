@@ -6,7 +6,7 @@ from streamlit_autorefresh import st_autorefresh
 
 # ================= 👑 1. PAGE CONFIGURATION =================
 st.set_page_config(
-    page_title="TRADE MENTOR: PRO SCALPER MASTER", 
+    page_title="TRADE MENTOR: INSTITUTIONAL SCALPER", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
@@ -48,7 +48,7 @@ def change_active_coin(new_coin):
 if st.session_state.live_mode:
     st_autorefresh(interval=10000, limit=None, key="live_data_refresh")
 
-# ================= ⚡ 4. HARDCORE CORE ENGINE (NO-REPAINT & SCORE-BASED) =================
+# ================= ⚡ 4. INSTITUTIONAL CORE ENGINE =================
 def fetch_and_analyze(coin):
     try:
         # MTF (No-Repaint: iloc[-2])
@@ -72,75 +72,89 @@ def fetch_and_analyze(coin):
         df['ema_13'] = df['close'].ewm(span=13, adjust=False).mean()
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
         
+        # RSI
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean() + 1e-10
         df['rsi'] = 100 - (100 / (1 + (gain / loss)))
         
-        # NO-REPAINT ENGINE: সমস্ত লজিক Closed Candle (iloc[-2]) থেকে নেওয়া
-        c2 = df.iloc[-2]  # Last Closed Candle
-        c3 = df.iloc[-3]
-        c4 = df.iloc[-4]
+        # True Range & ATR
+        df['prev_close'] = df['close'].shift(1)
+        df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
+        df['atr'] = df['tr'].rolling(14).mean()
         
-        # Candle Patterns
+        # ================= NEW: ADX CALCULATION (The Fake Signal Killer) =================
+        up_move = df['high'] - df['high'].shift(1)
+        down_move = df['low'].shift(1) - df['low']
+        df['+dm'] = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+        df['-dm'] = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+        df['+di'] = 100 * (df['+dm'].ewm(alpha=1/14, adjust=False).mean() / df['tr'].ewm(alpha=1/14, adjust=False).mean())
+        df['-di'] = 100 * (df['-dm'].ewm(alpha=1/14, adjust=False).mean() / df['tr'].ewm(alpha=1/14, adjust=False).mean())
+        df['dx'] = 100 * abs(df['+di'] - df['-di']) / (df['+di'] + df['-di'] + 1e-10)
+        df['adx'] = df['dx'].ewm(alpha=1/14, adjust=False).mean()
+
+        # NO-REPAINT ENGINE: Closed Candle (iloc[-2])
+        c2 = df.iloc[-2]
+        c3 = df.iloc[-3]
+        
         c2_body = abs(c2['open'] - c2['close'])
         c2_upper = c2['high'] - max(c2['open'], c2['close'])
         c2_lower = min(c2['open'], c2['close']) - c2['low']
         c2_is_green = c2['close'] > c2['open']
         c2_is_red = c2['close'] < c2['open']
         c3_body = abs(c3['open'] - c3['close'])
-        c3_is_green = c3['close'] > c3['open']
-        c3_is_red = c3['close'] < c3['open']
 
         is_hammer = (c2_lower >= (2 * c2_body)) and (c2_upper <= c2_body) and (c2_body > 0)
         is_shooting_star = (c2_upper >= (2 * c2_body)) and (c2_lower <= c2_body) and (c2_body > 0)
-        is_be = c3_is_red and c2_is_green and (c2['close'] >= c3['open']) and (c2['open'] <= c3['close']) and (c2_body > c3_body)
-        is_bere = c3_is_green and c2_is_red and (c2['close'] <= c3['open']) and (c2['open'] >= c3['close']) and (c2_body > c3_body)
+        is_be = c3['close'] < c3['open'] and c2_is_green and (c2['close'] >= c3['open']) and (c2['open'] <= c3['close']) and (c2_body > c3_body)
+        is_bere = c3['close'] > c3['open'] and c2_is_red and (c2['close'] <= c3['open']) and (c2['open'] >= c3['close']) and (c2_body > c3_body)
         
         bullish_pattern = is_hammer or is_be
         bearish_pattern = is_shooting_star or is_bere
 
-        df['prev_close'] = df['close'].shift(1)
-        df['tr'] = df[['high', 'low', 'prev_close']].apply(lambda x: max(x['high'] - x['low'], abs(x['high'] - x['prev_close']), abs(x['low'] - x['prev_close'])), axis=1)
-        atr = df['tr'].rolling(14).mean().iloc[-2]
-
-        # No-Repaint Variables
         closed_price = c2['close']
         closed_vwap = df['vwap'].iloc[-2]
         closed_rsi = df['rsi'].iloc[-2]
         closed_vol = c2['volume']
+        closed_adx = df['adx'].iloc[-2]
+        closed_atr = df['atr'].iloc[-2]
+        
+        # ================= NEW: 24H VOLUME REGIME =================
+        # 5m timeframe: 24h = 12 * 24 = 288 candles
+        avg_vol_24h = df['volume'].rolling(288).mean().iloc[-2]
         vol_sma = df['volume'].rolling(20).mean().iloc[-2]
         
         trend_up = closed_price > df['ema_50'].iloc[-2]
         momentum_bullish = df['ema_5'].iloc[-2] > df['ema_13'].iloc[-2]
-        
         buyer_vol_spike = (closed_vol > vol_sma * 1.5) and c2_is_green
         seller_vol_spike = (closed_vol > vol_sma * 1.5) and c2_is_red
 
-        # SCORE-BASED SYSTEM (Total 7 Points)
-        buy_score, sell_score = 0, 0
+        swing_low = df['low'].tail(15).min()
+        swing_high = df['high'].tail(15).max()
         
+        # ================= NEW: CHOPPY MARKET / DEAD MODE FILTER =================
+        # If ADX < 18 OR Volume is less than half of 24h average -> Dead Market
+        is_choppy = (closed_adx < 18) or (closed_vol < (avg_vol_24h * 0.5))
+
+        # SCORE-BASED SYSTEM
+        buy_score, sell_score = 0, 0
         if trend_up: buy_score += 1
         else: sell_score += 1
-        
         if mtf_15m_trend_up: buy_score += 1
         else: sell_score += 1
-        
         if closed_price > closed_vwap: buy_score += 1
         else: sell_score += 1
-        
         if momentum_bullish: buy_score += 1
         else: sell_score += 1
-        
         if buyer_vol_spike: buy_score += 1
         if seller_vol_spike: sell_score += 1
-        
         if bullish_pattern: buy_score += 2
         if bearish_pattern: sell_score += 2
 
-        # Final Signal Check
         signal_type = "NORMAL"
-        if buy_score >= 5 and closed_rsi < 75:
+        if is_choppy:
+            signal_type = "DEAD MARKET"
+        elif buy_score >= 5 and closed_rsi < 75:
             signal_type = "HIGH PROBABILITY BUY"
         elif sell_score >= 5 and closed_rsi > 25:
             signal_type = "HIGH PROBABILITY SELL"
@@ -148,16 +162,12 @@ def fetch_and_analyze(coin):
         p_name = "প্যাটার্ন কনফার্ম 🟢" if bullish_pattern else "প্যাটার্ন কনফার্ম 🔴" if bearish_pattern else "প্যাটার্ন নেই ➖"
         p_color = "#00FF00" if bullish_pattern else "#FF1744" if bearish_pattern else "#848E9C"
 
-        swing_low = df['low'].tail(15).min()
-        swing_high = df['high'].tail(15).max()
-        is_choppy = atr < (df['close'].iloc[-1] * 0.001)
-
         return {
             'price': df['close'].iloc[-1], 'closed_price': closed_price, 'signal': signal_type, 
             'buy_score': buy_score, 'sell_score': sell_score, 'rsi': closed_rsi, 
-            'vwap': closed_vwap, 'atr': atr, 'mtf_up': mtf_15m_trend_up, 
+            'vwap': closed_vwap, 'atr': closed_atr, 'mtf_up': mtf_15m_trend_up, 
             'trend_up': trend_up, 'momentum_bullish': momentum_bullish,
-            'is_choppy': is_choppy, 'p_name': p_name, 'p_color': p_color, 
+            'is_choppy': is_choppy, 'adx': closed_adx, 'p_name': p_name, 'p_color': p_color, 
             'swing_low': swing_low, 'swing_high': swing_high
         }
     except Exception: return None
@@ -165,7 +175,7 @@ def fetch_and_analyze(coin):
 all_data = {coin: fetch_and_analyze(coin) for coin in SCALPING_COINS}
 
 # ================= 🚨 5. GLOBAL SIGNAL RADAR UI =================
-st.markdown("<h3 style='color:#FCD535;'>🚨 প্রফেশনাল লাইভ রাডার (No-Repaint & Score Engine)</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:#FCD535;'>🚨 প্রপ-ফার্ম লাইভ রাডার (ADX & Risk Capped)</h3>", unsafe_allow_html=True)
 
 tc1, tc2 = st.columns([1, 4])
 with tc1:
@@ -177,7 +187,7 @@ with tc2:
     if st.session_state.live_mode:
         st.markdown("<p style='color:#00FF00; font-size:14px; margin-top:8px;'>✅ লাইভ মোড অ্যাক্টিভ! অটোমেটিক ১০ সেকেন্ড পর পর আপডেট হচ্ছে।</p>", unsafe_allow_html=True)
     else:
-        st.markdown("<p style='color:#848E9C; font-size:14px; margin-top:8px;'>⏸️ লাইভ মোড অফ করা আছে। (API বাঁচাতে ট্রেড না করলে অফ রাখুন)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#848E9C; font-size:14px; margin-top:8px;'>⏸️ লাইভ মোড অফ করা আছে।</p>", unsafe_allow_html=True)
 
 active_signals = 0
 for coin, data in all_data.items():
@@ -190,21 +200,31 @@ for coin, data in all_data.items():
         ic = "✅ HIGH PROBABILITY BUY" if is_buy else "⚠️ HIGH PROBABILITY SELL"
         score = data['buy_score'] if is_buy else data['sell_score']
         
-        # MAX RISK CAP (0.5%) & DYNAMIC FEE CALCULATION
-        max_risk_cap = 0.005 
-        taker_fee = 0.001 
         entry = data['price']
+        atr = data['atr']
+        
+        # ================= NEW: DYNAMIC SL & SLIPPAGE MATH =================
+        max_risk_cap = 0.01 # Max 1% Risk Rule
+        taker_fee = 0.002   # 0.1% Buy + 0.1% Sell
+        slippage = 0.0005   # 0.05% Slippage Buffer
+        total_cost_percent = taker_fee + slippage
         
         if is_buy:
-            tech_sl = data['swing_low'] if data['swing_low'] < entry else entry - (data['atr'] * 1.5)
-            if (entry - tech_sl) / entry > max_risk_cap: sl = entry * (1 - max_risk_cap)
-            else: sl = tech_sl
-            tp = entry + ((entry - sl) * 1.5) + (entry * taker_fee * 2)
+            tech_sl_dist = abs(entry - data['swing_low'])
+            atr_sl_dist = atr * 1.5
+            stop_distance = max(atr_sl_dist, tech_sl_dist)
+            final_sl_dist = min(stop_distance, entry * max_risk_cap) # Capped at 1%
+            sl = entry - final_sl_dist
+            
+            tp = entry + (final_sl_dist * 1.5) + (entry * total_cost_percent)
         else:
-            tech_sl = data['swing_high'] if data['swing_high'] > entry else entry + (data['atr'] * 1.5)
-            if (tech_sl - entry) / entry > max_risk_cap: sl = entry * (1 + max_risk_cap)
-            else: sl = tech_sl
-            tp = entry - ((sl - entry) * 1.5) - (entry * taker_fee * 2)
+            tech_sl_dist = abs(data['swing_high'] - entry)
+            atr_sl_dist = atr * 1.5
+            stop_distance = max(atr_sl_dist, tech_sl_dist)
+            final_sl_dist = min(stop_distance, entry * max_risk_cap) # Capped at 1%
+            sl = entry + final_sl_dist
+            
+            tp = entry - (final_sl_dist * 1.5) - (entry * total_cost_percent)
         
         html_card = (
             f"<div class='{cc}'>"
@@ -214,8 +234,8 @@ for coin, data in all_data.items():
             f"<span style='font-size:14px; color:#EAECEF;'>🎯 বট স্কোর: <b>{score}/7</b></span>"
             f"</div>"
             f"<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>"
-            f"<span style='color:#00FF00; font-weight:bold; font-size:15px;'>🚀 নিট টার্গেট (ফী সহ): {tp:.4f}</span>"
-            f"<span style='color:#FF1744; font-weight:bold; font-size:15px;'>🛑 সেফ SL (Risk Capped): {sl:.4f}</span>"
+            f"<span style='color:#00FF00; font-weight:bold; font-size:15px;'>🚀 নিট টার্গেট (ফী+স্লিপেজ সহ): {tp:.4f}</span>"
+            f"<span style='color:#FF1744; font-weight:bold; font-size:15px;'>🛑 ডায়নামিক SL: {sl:.4f}</span>"
             f"</div>"
             f"</div>"
         )
@@ -249,21 +269,23 @@ if st.session_state.active_coin in all_data and all_data[st.session_state.active
     else: mtv, mtc = "ডাউন-ট্রেন্ড", "#FF1744"
     with mc2: st.markdown(f"<div class='metric-card' style='border-color:{mtc}'><div class='metric-title'>২. 15m বড় ট্রেন্ড</div><div class='metric-value' style='color:{mtc}'>{mtv}</div></div>", unsafe_allow_html=True)
     
-    if d['closed_price'] > d['vwap']: vv, vc = "VWAP এর উপরে 🟢", "#00FF00"
-    else: vv, vc = "VWAP এর নিচে 🔴", "#FF1744"
-    with mc3: st.markdown(f"<div class='metric-card' style='border-color:{vc}'><div class='metric-title'>৩. VWAP</div><div class='metric-value' style='color:{vc}'>{vv}</div></div>", unsafe_allow_html=True)
+    if d['is_choppy']: 
+        adx_v, adx_c = f"DEAD (ADX: {d['adx']:.1f}) 🔴", "#FF1744"
+    else: 
+        adx_v, adx_c = f"ACTIVE (ADX: {d['adx']:.1f}) 🟢", "#00FF00"
+    with mc3: st.markdown(f"<div class='metric-card' style='border-color:{adx_c}'><div class='metric-title'>৩. ADX ফিল্টার</div><div class='metric-value' style='color:{adx_c}'>{adx_v}</div></div>", unsafe_allow_html=True)
     
     with mc4: st.markdown(f"<div class='metric-card' style='border-color:{d['p_color']}'><div class='metric-title'>৪. ক্যান্ডেলস্টিক</div><div class='metric-value' style='color:{d['p_color']}'>{d['p_name']}</div></div>", unsafe_allow_html=True)
     
-    header_msg = f"<h4 style='color:#FCD535; margin-top:15px; border-bottom: 1px solid #2B3139; padding-bottom:10px;'>💡 {st.session_state.active_coin} মাস্টার ব্রেকডাউন (Closed Candle Logic)</h4>"
+    header_msg = f"<h4 style='color:#FCD535; margin-top:15px; border-bottom: 1px solid #2B3139; padding-bottom:10px;'>💡 {st.session_state.active_coin} মাস্টার ব্রেকডাউন</h4>"
     st.markdown(header_msg, unsafe_allow_html=True)
     
-    if d['is_choppy']:
-        st.markdown("<div class='reason-box' style='border-left-color: #848E9C;'><b>মার্কেট ডেড!</b><br>স্ক্যাল্পিংয়ের জন্য এন্ট্রি নিলে লস হওয়ার চান্স বেশি। ভলিউম আসার অপেক্ষা করুন।</div>", unsafe_allow_html=True)
+    if d['signal'] == "DEAD MARKET":
+        st.markdown("<div class='reason-box' style='border-left-color: #FF1744;'><b>🚨 ডেড মার্কেট মুড অ্যাক্টিভ!</b><br>বট ট্রেড অফ রেখেছে কারণ ADX ১৮ এর নিচে অথবা মার্কেটে 24h এভারেজ ভলিউম নেই। এটি আপনার ৮০% ফেক সিগন্যাল থেকে ক্যাপিটাল বাঁচাচ্ছে।</div>", unsafe_allow_html=True)
     elif "BUY" in d['signal']:
-        st.markdown(f"<div class='reason-box'><b>HIGH PROBABILITY BUY সিগন্যাল কেন?</b><br>বট ৭ এর মধ্যে <b>{d['buy_score']} পয়েন্ট</b> পেয়েছে। ৫ মিনিটের ট্রেন্ড আপ, প্রাইস VWAP এর উপরে এবং ভলিউম কনফার্মড। ফী হিসাব করে টার্গেট সেট করা হয়েছে।</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='reason-box' style='border-left-color: #00FF00;'><b>HIGH PROBABILITY BUY 🚀</b><br>বট ৭ এর মধ্যে <b>{d['buy_score']} পয়েন্ট</b> পেয়েছে। ADX সাপোর্ট করছে, ট্রেন্ড আপ, এবং ভলিউম কনফার্মড। ফী এবং স্লিপেজ হিসাব করে টার্গেট সেট করা হয়েছে।</div>", unsafe_allow_html=True)
     elif "SELL" in d['signal']:
-        st.markdown(f"<div class='reason-box'><b>HIGH PROBABILITY SELL সিগন্যাল কেন?</b><br>বট ৭ এর মধ্যে <b>{d['sell_score']} পয়েন্ট</b> পেয়েছে। ৫ মিনিটের ট্রেন্ড ডাউন, প্রাইস VWAP এর নিচে এবং ভলিউম কনফার্মড। ফী হিসাব করে টার্গেট সেট করা হয়েছে।</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='reason-box' style='border-left-color: #FF1744;'><b>HIGH PROBABILITY SELL 🧨</b><br>বট ৭ এর মধ্যে <b>{d['sell_score']} পয়েন্ট</b> পেয়েছে। ADX সাপোর্ট করছে, ট্রেন্ড ডাউন, এবং ভলিউম কনফার্মড। ফী এবং স্লিপেজ হিসাব করে টার্গেট সেট করা হয়েছে।</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='reason-box' style='border-left-color: #848E9C;'><b>{st.session_state.active_coin} এ কোনো প্রো-সিগন্যাল নেই।</b><br>বটের স্কোর এখনো ৫ পয়েন্টে পৌঁছায়নি। সবগুলো সেফটি রুল না মেলা পর্যন্ত এন্ট্রি নেওয়া রিস্কি।</div>", unsafe_allow_html=True)
 
@@ -277,22 +299,20 @@ if st.session_state.active_coin in all_data and all_data[st.session_state.active
             "<b style='color:#FCD535;'>📌 বর্তমান টেকনিক্যাল নাম্বার</b><br>"
             f"🔹 বর্তমান প্রাইস (Live): {d['price']:.4f}<br>"
             f"🔹 VWAP (Closed): {d['vwap']:.4f}<br>"
-            f"🔹 RSI (Closed): {d['rsi']:.2f}<br>"
+            f"🔹 ADX (Trend Strength): {d['adx']:.2f}<br>"
             f"🔹 বাই স্কোর: {d['buy_score']}/7 | সেল স্কোর: {d['sell_score']}/7"
             "</div>"
         ), unsafe_allow_html=True)
         
     with lc2:
-        mtf_status = 'বুলিশ 🟢' if d['mtf_up'] else 'বিয়ারিশ 🔴'
         vwap_status = 'উপরে 🟢' if d['closed_price'] > d['vwap'] else 'নিচে 🔴'
         mom_status = 'Bullish 🟢' if d['momentum_bullish'] else 'Bearish 🔴'
-        chop_status = 'ডেড 🔴' if d['is_choppy'] else 'ভলিউম আছে 🟢'
         st.markdown((
             "<div class='learning-box'>"
             "<b style='color:#00FF00;'>💡 মাস্টার কন্ডিশন স্ট্যাটাস</b><br>"
-            f"✅ 15m ট্রেন্ড (No-Repaint): {mtf_status}<br>"
             f"✅ VWAP পজিশন: {vwap_status}<br>"
             f"✅ 5m মোমেন্টাম: {mom_status}<br>"
-            f"✅ মার্কেট অবস্থা: {chop_status}<br>"
+            f"✅ ADX স্ট্যাটাস: {'ডেড মার্কেট 🔴' if d['adx'] < 18 else 'রানিং মার্কেট 🟢'}<br>"
+            f"✅ ডায়নামিক স্লিপেজ বাফার: অ্যাক্টিভ 🟢<br>"
             "</div>"
         ), unsafe_allow_html=True)
