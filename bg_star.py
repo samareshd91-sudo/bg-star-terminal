@@ -1,295 +1,376 @@
+import streamlit as st
+import streamlit.components.v1 as components
+import os
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from collections import deque
+from dataclasses import dataclass
+from typing import Optional, List
 import ccxt
 import pandas as pd
-import time
-import threading
-import concurrent.futures
-import streamlit as st
-from enum import Enum
-from dataclasses import dataclass
-from typing import Dict, Optional
-from datetime import date, datetime
+import numpy as np
+from streamlit_autorefresh import st_autorefresh
 
-# Streamlit-এর page_config সবসময় সবার উপরে (ইম্পোর্টের পরেই) রাখা ভালো
-st.set_page_config(page_title="Institutional Bot", layout="wide")
+==========================================
 
-# ==========================================
-# 1. SMC STATE MACHINE & DATA CLASSES
-# ==========================================
+১. Cloud-Safe Logging Setup
 
-class SMCState(Enum):
-    WAIT_FOR_LEVELS = "WAIT_FOR_LEVELS"
-    WATCH_BREAK = "WATCH_BREAK"
-    WAIT_CONFIRMATION = "WAIT_CONFIRMATION"
-    ENTRY_READY = "ENTRY_READY"
+==========================================
+
+logger = logging.getLogger("pure_blueprint_final")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+ch = logging.StreamHandler()
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+st.set_page_config(page_title="Pure Blueprint Final + Whale Info", layout="wide")
+st_autorefresh(interval=30000, key="bot_refresh")
+
+==========================================
+
+২. Session State & Memory
+
+==========================================
+
+MAX_HISTORY = 300
+if 'trigger_history' not in st.session_state:
+st.session_state.trigger_history = deque(maxlen=MAX_HISTORY)
+if 'triggered_set' not in st.session_state:
+st.session_state.triggered_set = set()
+if 'signal_cooldowns' not in st.session_state:
+st.session_state.signal_cooldowns = {}
+
+now = datetime.now()
+expired_keys = [k for k, v in st.session_state.signal_cooldowns.items() if now - v > timedelta(minutes=30)]
+for k in expired_keys:
+del st.session_state.signal_cooldowns[k]
+
+==========================================
+
+৩. Alert Engine
+
+==========================================
+
+STATIC_DIR = Path(file).parent.absolute() / "static"
+WEB_AUDIO_PATH = "app/static/alert.mp3" if os.path.exists("/mount/src/app/static/alert.mp3") else "static/alert.mp3"
+
+def trigger_pro_alerts(coin, direction, entry, delay_index=0):
+flash_color = "rgba(0, 255, 170, 0.3)" if direction == "BUY" else "rgba(255, 68, 68, 0.3)"
+safe_coin = coin.replace("/", "")
+audio_id = f"alarm_{safe_coin}{direction}"
+ls_key = f"lastSMCAlert{safe_coin}_{direction}"
+js_delay = delay_index * 2000
+
+js_code = f"""  
+<audio id="{audio_id}" preload="auto" style="display:none">  
+    <source src="{WEB_AUDIO_PATH}" type="audio/mpeg">  
+</audio>  
+<script>  
+    setTimeout(() => {{  
+        try {{  
+            const mainDoc = document;  
+            const mainWindow = window;  
+            const sigKey = "{coin}_{direction}_{entry}";  
+            const lsKey = "{ls_key}";  
+            let allowAlert = true;  
+
+            if (!mainWindow.localStorage.getItem("notifAsked")) {{  
+                if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();  
+                mainWindow.localStorage.setItem("notifAsked", "1");  
+            }}  
+
+            try {{  
+                if (mainWindow.localStorage.getItem(lsKey) === sigKey) allowAlert = false;  
+                else mainWindow.localStorage.setItem(lsKey, sigKey);  
+            }} catch (e) {{ allowAlert = true; }}  
+
+            if (allowAlert) {{  
+                try {{  
+                    if (mainWindow.flashTimeout) clearTimeout(mainWindow.flashTimeout);  
+                    if (!mainWindow.originalBgColor) mainWindow.originalBgColor = mainWindow.getComputedStyle(mainDoc.body).backgroundColor;  
+                    mainDoc.body.style.transition = "background-color 0.3s ease";  
+                    mainDoc.body.style.backgroundColor = "{flash_color}";  
+                    mainWindow.flashTimeout = setTimeout(() => {{  
+                        mainDoc.body.style.backgroundColor = mainWindow.originalBgColor;  
+                        mainWindow.originalBgColor = null;  
+                    }}, 2000);  
+                }} catch (e) {{}}  
+
+                try {{  
+                    let audio = mainDoc.getElementById("{audio_id}");  
+                    if (audio) {{  
+                        audio.pause(); audio.currentTime = 0;  
+                        audio.play().catch(e => console.log("Autoplay Blocked"));  
+                        setTimeout(() => {{ audio.pause(); audio.currentTime = 0; }}, 5000);  
+                    }}  
+                }} catch (e) {{}}  
+
+                try {{  
+                    if ('speechSynthesis' in window) {{  
+                        let msg = new SpeechSynthesisUtterance("Blueprint Final {direction} signal on {safe_coin}");  
+                        window.speechSynthesis.speak(msg);  
+                    }}  
+                    if ("Notification" in window && Notification.permission === "granted") {{  
+                        new Notification("🎯 Blueprint Pro: {coin} {direction}", {{ body: "Entry: {entry}" }});  
+                    }}  
+                }} catch (e) {{}}  
+            }}  
+        }} catch (e) {{ console.error("Alert Error:", e); }}  
+    }}, {js_delay});  
+</script>  
+"""  
+components.html(js_code, height=0, width=0)
+
+==========================================
+
+৪. API Caching
+
+==========================================
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_data_safe(exchange_id: str, symbol: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
+try:
+exchange = getattr(ccxt, exchange_id)({'enableRateLimit': True, 'timeout': 5000})
+ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+df.set_index('timestamp', inplace=True)
+return df
+except Exception as e:
+logger.error(f"Error fetching {symbol} {timeframe}: {e}")
+return None
+
+==========================================
+
+৫. Pure Blueprint Final Engine
+
+==========================================
 
 @dataclass
-class SignalResult:
-    symbol: str
-    direction: str
-    entry_price: float
-    stop_loss: float
-    take_profit: float
-    position_size: float  # Added Risk Management
-    timestamp: pd.Timestamp
+class PureBlueprintSetup:
+symbol: str
+direction: str
+entry_price: float
+sl: float
+tp: float
+setup_type: str
+cvd_status: str
 
-@dataclass
-class CoinStateTracker:
-    state: SMCState = SMCState.WAIT_FOR_LEVELS
-    direction: Optional[str] = None
-    pdh: float = 0.0
-    pdl: float = 0.0
-    wait_candles: int = 0
-    conf_candle_high: float = 0.0
-    conf_candle_low: float = 0.0
-    last_processed_time: Optional[pd.Timestamp] = None  
-    current_date: Optional[date] = None  
-    trade_taken_pdl: bool = False  
-    trade_taken_pdh: bool = False  
-    daily_loss_count: int = 0  # Added Risk Management
+class PureBlueprintEngineFinal:
+def init(self, exchange_id='kucoin'):
+self.exchange_id = exchange_id
+self.WHALE_MULTIPLIER = 1.6  # ✅ Configurable Whale Volume Multiplier
 
-# ==========================================
-# 2. RISK MANAGEMENT & ALERTS
-# ==========================================
+def approx_cvd(self, df: pd.DataFrame) -> float:  
+    """CVD Proxy - Used for UI Information only, not as a hard block"""  
+    buy_pressure = df['close'] - df['low']  
+    sell_pressure = df['high'] - df['close']  
+    total_pressure = buy_pressure + sell_pressure + 1e-9  
+    delta = df['volume'] * ((buy_pressure - sell_pressure) / total_pressure)  
+    return delta.sum()  
 
-ACCOUNT_BALANCE = 1000.0  # Base capital
-RISK_PER_TRADE_PERCENT = 1.0  # 1% risk per trade
-MAX_DAILY_LOSSES = 2
+def execute_engine(self, symbol: str) -> List[PureBlueprintSetup]:  
+    df_1d = fetch_data_safe(self.exchange_id, symbol, '1d', limit=5)  
+    df_1m = fetch_data_safe(self.exchange_id, symbol, '1m', limit=100)  
+      
+    if df_1d is None or df_1m is None or len(df_1m) < 30:  
+        return []  
 
-def calculate_position_size(entry: float, sl: float) -> float:
-    risk_amount = ACCOUNT_BALANCE * (RISK_PER_TRADE_PERCENT / 100)
-    sl_distance = abs(entry - sl)
-    if sl_distance == 0: 
-        return 0.0
-    qty = risk_amount / sl_distance
-    return round(qty, 4)
+    # 1. D1 High/Low Mark  
+    pdh = df_1d['high'].iloc[-2]  
+    pdl = df_1d['low'].iloc[-2]  
 
-def trigger_pro_alerts(msg: str):
-    # Dummy implementation for your actual system
-    print(f"🔔 [TELEGRAM/DISCORD]: {msg}")
+    # ✅ Added min_periods=20 to avoid initial NaNs  
+    df_1m['vol_avg'] = df_1m['volume'].rolling(20, min_periods=20).mean()  
+      
+    # ✅ Using last_close for confirmation, current_price for entry execution  
+    last_close = df_1m['close'].iloc[-2]  
+    current_price = df_1m['close'].iloc[-1]  
+      
+    valid_setups = []  
 
-def play_tts_voice(direction: str, symbol: str):
-    # Dummy implementation
-    print(f"🔊 [TTS]: '{direction} signal generated for {symbol}'")
-
-def trigger_vibration():
-    # Dummy implementation
-    print("📳 [VIBRATION]: Bzzzz!")
-
-# ==========================================
-# 3. THE INSTITUTIONAL SMC ENGINE
-# ==========================================
-
-class SMCStrategyEngine:
-    def __init__(self, max_wait_candles: int = 5):
-        self.trackers: Dict[str, CoinStateTracker] = {}
-        self.max_wait_candles = max_wait_candles
-
-    def get_tracker(self, symbol: str) -> CoinStateTracker:  
-        if symbol not in self.trackers:  
-            self.trackers[symbol] = CoinStateTracker()  
-        return self.trackers[symbol]  
-
-    def reset_tracker_for_signal_expire(self, symbol: str):  
-        tracker = self.get_tracker(symbol)  
-        tracker.state = SMCState.WATCH_BREAK  
-        tracker.direction = None  
-        tracker.wait_candles = 0  
-
-    def calculate_daily_levels(self, symbol: str, df_daily: pd.DataFrame, current_time: pd.Timestamp):  
-        if len(df_daily) < 2: return  
-              
-        tracker = self.get_tracker(symbol)  
-        current_date = current_time.date()  
+    # =========================================================  
+    # BUY LOGIC  
+    # =========================================================  
+    buy_triggered = False  
+    for i in range(len(df_1m) - 30, len(df_1m) - 2): # Checking history excluding the last running candle  
+        m1_close = df_1m['close'].iloc[i]  
           
-        # New Day Reset  
-        if tracker.current_date != current_date:  
-            tracker.current_date = current_date  
-            tracker.trade_taken_pdl = False  
-            tracker.trade_taken_pdh = False  
-            tracker.daily_loss_count = 0  
-            tracker.state = SMCState.WATCH_BREAK   
-              
-        yesterday_candle = df_daily.iloc[-2]  
-        tracker.pdh = float(yesterday_candle['high'])  
-        tracker.pdl = float(yesterday_candle['low'])  
+        # 2. M1 Close < Daily Low & Min Sweep Distance (0.08%)  
+        if m1_close < pdl:  
+            sweep_distance = (pdl - m1_close) / pdl  
+            if sweep_distance >= 0.0008:   
+                  
+                # 3. Wait for GREEN candle  
+                for j in range(i + 1, len(df_1m) - 1): # Exclude the very last running candle from being the confirmation candle  
+                    is_green = df_1m['close'].iloc[j] > df_1m['open'].iloc[j]  
+                      
+                    if is_green:  
+                        green_high = df_1m['high'].iloc[j]  
+                        green_low = df_1m['low'].iloc[j]  
+                          
+                        # ✅ Configurable Whale Volume Check  
+                        whale_entered = (df_1m['volume'].iloc[i] > df_1m['vol_avg'].iloc[i] * self.WHALE_MULTIPLIER) or \  
+                                        (df_1m['volume'].iloc[j] > df_1m['vol_avg'].iloc[j] * self.WHALE_MULTIPLIER)  
+                          
+                        if whale_entered:  
+                            # ✅ 4. Last completed candle breaks green's High (No repainting)  
+                            if last_close > green_high:  
+                                entry = current_price  
+                                # ✅ Added SL Buffer (0.02% safety from wick hunts)  
+                                sl = green_low * 0.9998              
+                                tp = pdh                    
+                                  
+                                cvd_value = self.approx_cvd(df_1m.iloc[i:j+1])  
+                                cvd_status = "🟢 CVD Positive" if cvd_value > 0 else "🔴 CVD Negative (Info)"  
+                                  
+                                risk = entry - sl  
+                                if risk > 0 and (entry - sl) / entry < 0.015:   
+                                    valid_setups.append(PureBlueprintSetup(  
+                                        symbol, "BUY", round(entry, 4), round(sl, 4), round(tp, 4),   
+                                        f"Blueprint: 0.08% Sweep + Vol ({self.WHALE_MULTIPLIER}x)", cvd_status  
+                                    ))  
+                                    buy_triggered = True  
+                                    break  
+                if buy_triggered: break  
 
-    def process_m1_candle(self, symbol: str, df_m1: pd.DataFrame) -> Optional[SignalResult]:  
-        if len(df_m1) < 2: return None  
-              
-        tracker = self.get_tracker(symbol)  
-        if tracker.state == SMCState.WAIT_FOR_LEVELS or tracker.pdh == 0.0: return None  
-        if tracker.daily_loss_count >= MAX_DAILY_LOSSES: return None # Risk Filter  
-
-        last_closed = df_m1.iloc[-2]  
-        current_time = last_closed.name  
-
-        if tracker.last_processed_time == current_time: return None  
-        tracker.last_processed_time = current_time  
-
-        high = float(last_closed['high'])  
-        low = float(last_closed['low'])  
-        close = float(last_closed['close'])  
-        open_price = float(last_closed['open'])  
+    # =========================================================  
+    # SELL LOGIC  
+    # =========================================================  
+    sell_triggered = False  
+    for i in range(len(df_1m) - 30, len(df_1m) - 2):  
+        m1_close = df_1m['close'].iloc[i]  
           
-        # 1. FIXED BUY/SELL LOGIC (True Liquidity Sweep)  
-        if tracker.state == SMCState.WATCH_BREAK:  
-            if low < tracker.pdl and close > tracker.pdl and not tracker.trade_taken_pdl:  
-                tracker.direction = 'BUY'  
-                tracker.state = SMCState.WAIT_CONFIRMATION  
-                tracker.wait_candles = 0  
-                return None  
-            elif high > tracker.pdh and close < tracker.pdh and not tracker.trade_taken_pdh:  
-                tracker.direction = 'SELL'  
-                tracker.state = SMCState.WAIT_CONFIRMATION  
-                tracker.wait_candles = 0  
-                return None  
-
-        elif tracker.state == SMCState.WAIT_CONFIRMATION:  
-            tracker.wait_candles += 1  
-            if tracker.wait_candles > self.max_wait_candles:  
-                self.reset_tracker_for_signal_expire(symbol)  
-                return None  
-
-            is_green = close > open_price  
-            is_red = close < open_price  
-
-            if (tracker.direction == 'BUY' and is_green) or (tracker.direction == 'SELL' and is_red):  
-                tracker.conf_candle_high = high  
-                tracker.conf_candle_low = low  
-                tracker.state = SMCState.ENTRY_READY  
-                tracker.wait_candles = 0  
-
-        elif tracker.state == SMCState.ENTRY_READY:  
-            tracker.wait_candles += 1  
-            if tracker.wait_candles > self.max_wait_candles:  
-                self.reset_tracker_for_signal_expire(symbol)  
-                return None  
-
-            if tracker.direction == 'BUY' and high > tracker.conf_candle_high:  
-                entry = tracker.conf_candle_high  
-                sl = tracker.conf_candle_low  
-                tp = max(tracker.pdh, entry + ((entry - sl) * 2.5))  
-                pos_size = calculate_position_size(entry, sl)  
+        # 2. M1 Close > Daily High & Min Sweep Distance (0.08%)  
+        if m1_close > pdh:  
+            sweep_distance = (m1_close - pdh) / pdh  
+            if sweep_distance >= 0.0008:   
                   
-                tracker.trade_taken_pdl = True  
-                tracker.state = SMCState.WATCH_BREAK  
-                return SignalResult(symbol, 'BUY', entry, sl, tp, pos_size, current_time)  
+                # 3. Wait for RED candle  
+                for j in range(i + 1, len(df_1m) - 1):  
+                    is_red = df_1m['close'].iloc[j] < df_1m['open'].iloc[j]  
+                      
+                    if is_red:  
+                        red_high = df_1m['high'].iloc[j]  
+                        red_low = df_1m['low'].iloc[j]  
+                          
+                        # ✅ Configurable Whale Volume Check  
+                        whale_entered = (df_1m['volume'].iloc[i] > df_1m['vol_avg'].iloc[i] * self.WHALE_MULTIPLIER) or \  
+                                        (df_1m['volume'].iloc[j] > df_1m['vol_avg'].iloc[j] * self.WHALE_MULTIPLIER)  
+                          
+                        if whale_entered:  
+                            # ✅ 4. Last completed candle breaks red's Low (No repainting)  
+                            if last_close < red_low:  
+                                entry = current_price  
+                                # ✅ Added SL Buffer (0.02% safety from wick hunts)  
+                                sl = red_high * 1.0002              
+                                tp = pdl                   
+                                  
+                                cvd_value = self.approx_cvd(df_1m.iloc[i:j+1])  
+                                cvd_status = "🔴 CVD Negative" if cvd_value < 0 else "🟢 CVD Positive (Info)"  
+                                  
+                                risk = sl - entry  
+                                if risk > 0 and (sl - entry) / entry < 0.015:   
+                                    valid_setups.append(PureBlueprintSetup(  
+                                        symbol, "SELL", round(entry, 4), round(sl, 4), round(tp, 4),   
+                                        f"Blueprint: 0.08% Sweep + Vol ({self.WHALE_MULTIPLIER}x)", cvd_status  
+                                    ))  
+                                    sell_triggered = True  
+                                    break  
+                if sell_triggered: break  
 
-            elif tracker.direction == 'SELL' and low < tracker.conf_candle_low:  
-                entry = tracker.conf_candle_low  
-                sl = tracker.conf_candle_high  
-                tp = min(tracker.pdl, entry - ((sl - entry) * 2.5))  
-                pos_size = calculate_position_size(entry, sl)  
-                  
-                tracker.trade_taken_pdh = True  
-                tracker.state = SMCState.WATCH_BREAK  
-                return SignalResult(symbol, 'SELL', entry, sl, tp, pos_size, current_time)  
-                  
-        return None
+    return valid_setups
 
-# ==========================================
-# 4. MULTI-THREAD SCANNER & CACHING
-# ==========================================
+engine = PureBlueprintEngineFinal()
 
-exchange = ccxt.kucoin({'enableRateLimit': True})
-symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
-strategy_engine = SMCStrategyEngine()
+==========================================
 
-# Caching Dictionary (API রেট লিমিট বাঁচার জন্য)
-d1_cache = {}
-d1_last_fetch = {}
+৬. Parallel Scanning & Dashboard UI
 
-def get_cached_d1(symbol: str) -> pd.DataFrame:
-    now = time.time()
-    # Cache valid for 4 hours (14400 seconds)
-    if symbol not in d1_cache or (now - d1_last_fetch.get(symbol, 0)) > 14400:
-        daily_ohlcv = exchange.fetch_ohlcv(symbol, timeframe='1d', limit=3)
-        df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
-        df_daily.set_index('timestamp', inplace=True)
-        d1_cache[symbol] = df_daily
-        d1_last_fetch[symbol] = now
-    return d1_cache[symbol]
+==========================================
 
-def process_single_coin(symbol: str):
-    try:
-        df_daily = get_cached_d1(symbol)
+st.title("🎯 Pure Blueprint Final + Volatility Info")
+st.markdown("Filters: D1 H/L Sweep (Min 0.08%) ➔ Reversal Candle ➔ High Vol Spike (>1.6x) ➔ Completed Breakout (CVD Info)")
 
-        m1_ohlcv = exchange.fetch_ohlcv(symbol, timeframe='1m', limit=5)  
-        df_m1 = pd.DataFrame(m1_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])  
-        df_m1['timestamp'] = pd.to_datetime(df_m1['timestamp'], unit='ms')  
-        df_m1.set_index('timestamp', inplace=True)  
-        current_time = df_m1.index[-1]  
+COINS_TO_SCAN = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
 
-        strategy_engine.calculate_daily_levels(symbol, df_daily, current_time)  
-        signal = strategy_engine.process_m1_candle(symbol, df_m1)  
+def scan_symbol(symbol):
+try:
+setups = engine.execute_engine(symbol)
+if setups:
+return [{
+"coin": s.symbol,
+"direction": s.direction,
+"entry": s.entry_price,
+"sl": s.sl,
+"tp": s.tp,
+"type": s.setup_type,
+"cvd": s.cvd_status
+} for s in setups]
+except Exception as e:
+logger.error(f"Error scanning {symbol}: {e}")
+return []
 
-        if signal:  
-            msg = f"🚀 [{signal.direction}] {signal.symbol} | Entry: {signal.entry_price} | SL: {signal.stop_loss} | TP: {signal.take_profit} | Qty: {signal.position_size}"  
+detected_signals = []
+max_workers = min(5, len(COINS_TO_SCAN))
+
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+futures = {executor.submit(scan_symbol, coin): coin for coin in COINS_TO_SCAN}
+try:
+for future in as_completed(futures, timeout=15):
+res_list = future.result()
+if res_list:
+detected_signals.extend(res_list)
+except TimeoutError:
+logger.warning("Scanner batch timeout.")
+except Exception as e:
+logger.warning(f"Scanner batch issue: {e}")
+
+==========================================
+
+৭. Signal Execution & UI Rendering
+
+==========================================
+
+if detected_signals:
+for index, sig in enumerate(detected_signals):
+coin, direction, entry = sig["coin"], sig["direction"], sig["entry"]
+sl, tp, sig_type, cvd_status = sig["sl"], sig["tp"], sig["type"], sig["cvd"]
+
+current_signal_id = f"{coin}_{direction}_{entry}"  
+    cooldown_key = f"{coin}_{direction}"  
+      
+    is_cooled_down = True  
+    if cooldown_key in st.session_state.signal_cooldowns:  
+        if datetime.now() < st.session_state.signal_cooldowns[cooldown_key] + timedelta(minutes=5): # 5 min cooldown  
+            is_cooled_down = False  
               
-            # Update global state for Streamlit UI  
-            st.session_state.alerts.insert(0, f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")  
+    if current_signal_id not in st.session_state.triggered_set and is_cooled_down:  
+        color_emoji = "🟩" if direction == "BUY" else "🟥"  
+        st.success(f"{color_emoji} **{sig_type}** | **{coin}** | Dir: **{direction}**")  
+          
+        # CVD Info Alert  
+        st.warning(f"📊 **High Activity Noted:** Volume > {engine.WHALE_MULTIPLIER}x | {cvd_status}")  
+          
+        st.markdown(f"""  
+        - **Live Entry:** `{entry}` (Triggered by previous closed candle)  
+        - **Stop Loss (SL):** `{sl}` (Reversal Extreme + Buffer)  
+        - **Take Profit (TP):** `{tp}` (Opposite D1 Range)  
+        """)  
+          
+        trigger_pro_alerts(coin, direction, entry, delay_index=index)  
+          
+        if len(st.session_state.trigger_history) == MAX_HISTORY:  
+            oldest_sig = st.session_state.trigger_history.popleft()  
+            st.session_state.triggered_set.discard(oldest_sig)  
               
-            # Trigger Hardware/OS Alerts  
-            trigger_pro_alerts(msg)  
-            play_tts_voice(signal.direction, signal.symbol)  
-            trigger_vibration()  
-              
-    except Exception as e:  
-        print(f"API Error {symbol}: {e}")
+        st.session_state.trigger_history.append(current_signal_id)  
+        st.session_state.triggered_set.add(current_signal_id)  
+        st.session_state.signal_cooldowns[cooldown_key] = datetime.now()
 
-def background_scanner_loop():
-    while st.session_state.scanner_running:
-        # ThreadPool for parallel fetching (Fast Execution)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(symbols)) as executor:
-            executor.map(process_single_coin, symbols)
-        time.sleep(15) # Wait before next poll
-
-# ==========================================
-# 5. STREAMLIT UI (NON-BLOCKING)
-# ==========================================
-
-# Initialize Session State Variables
-if 'alerts' not in st.session_state:
-    st.session_state.alerts = []
-if 'scanner_running' not in st.session_state:
-    st.session_state.scanner_running = False
-
-st.title("⚡ SMC Institutional Trading Bot")
-
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.write("### Control Panel")
-    if not st.session_state.scanner_running:
-        if st.button("▶ Start Engine", use_container_width=True):
-            st.session_state.scanner_running = True
-            # Daemon thread prevents Streamlit UI freeze
-            threading.Thread(target=background_scanner_loop, daemon=True).start()
-            st.rerun()
-    else:
-        if st.button("⏹ Stop Engine", type="primary", use_container_width=True):
-            st.session_state.scanner_running = False
-            st.rerun()
-
-    st.metric("Risk Per Trade", f"{RISK_PER_TRADE_PERCENT}%")  
-    st.metric("Base Capital", f"${ACCOUNT_BALANCE}")
-
-with col2:
-    st.write("### 🟢 Live Signal Feed")
-    # Refresh log button
-    st.button("🔄 Refresh Logs")
-
-    log_container = st.container(height=400)  
-    with log_container:  
-        if not st.session_state.alerts:  
-            st.info("Scanner is monitoring... waiting for setups.")  
-        else:  
-            for alert in st.session_state.alerts[:15]:  
-                if "BUY" in alert: 
-                    st.success(alert)  
-                elif "SELL" in alert: 
-                    st.error(alert)  
-                else: 
-                    st.text(alert)
-                    
+else:
+st.info("🎯 Pure Blueprint Final Active: Monitoring for >0.08% D1 Sweeps and >1.6x Volatility Spikes...")
