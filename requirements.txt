@@ -1,4 +1,5 @@
 streamlit
+starlette==0.39.2
 ccxt
 pandas
 numpy
