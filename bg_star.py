@@ -22,8 +22,10 @@ if not logger.handlers:
 st.set_page_config(page_title="Balanced Pro Scalper v3", layout="wide")
 st_autorefresh(interval=5000, key="bot_refresh")
 
-TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "YOUR_NEW_SECURE_BOT_TOKEN")
-TELEGRAM_CHAT_ID = "8614370967"
+# --- মূল পরিবর্তনটি এখানে করা হয়েছে ---
+# st.secrets এর বদলে os.getenv ব্যবহার করা হয়েছে যাতে রেন্ডারের Environment Variables সরাসরি কাজ করে
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_NEW_SECURE_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "8614370967")
 
 def send_telegram(msg):
     if not TELEGRAM_CHAT_ID or TELEGRAM_CHAT_ID == "YOUR_REAL_CHAT_ID": return
@@ -109,7 +111,7 @@ class Engine:
             
             c = df['close'].iloc[i]
             
-            # --- BUY LOGIC (Optimized Sweep: 0.15% instead of 0.10%) ---
+            # --- BUY LOGIC ---
             if c < pdl and (pdl - c) / pdl >= 0.0015:  
                 for j in range(i+1, min(i+5, l_idx)):
                     is_green = df['close'].iloc[j] > df['open'].iloc[j]
@@ -133,7 +135,7 @@ class Engine:
                                 res.append(Setup(sym, tf, "BUY", round(entry_price, 4), round(sl_price, 4), round(tp_price, 4), "Balanced Scalper v3", "🟢 EMA20 UPTREND", df.index[k]))
                                 break
 
-            # --- SELL LOGIC (Optimized Sweep: 0.15% instead of 0.10%) ---
+            # --- SELL LOGIC ---
             if c > pdh and (c - pdh) / pdh >= 0.0015:  
                 for j in range(i+1, min(i+5, l_idx)):
                     is_red = df['close'].iloc[j] < df['open'].iloc[j]
