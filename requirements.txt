@@ -2,6 +2,5 @@ streamlit
 ccxt
 pandas
 numpy
-plotly
 requests
-streamlit-autorefresh
+APScheduler
